@@ -144,19 +144,18 @@ test('owner execution belongs only to the active matching research request, not 
     .rejects.toThrow('Invalid research');
 });
 
-test('OAuth scope policy stays within normal collaboration and expires with the verified token', async () => {
+test('OAuth scope grants no optional owner activity and its execution binding expires with the token', async () => {
   const { resource, sign } = await fixture();
   const exp = Math.floor(Date.now() / 1000) + 60;
   const authorization = await resource.verifyAccessToken(await sign({ exp }));
   const principal: ScopePrincipal = { accountId: config.accountId, modelId: 'codex', role: 'agent', sessionId: 'request' };
   const owner = resource.ownerActivity();
-  const request = { accountId: config.accountId, executionTarget: 'auth0-research', activity: 'collaboration' as const,
+  const request = { accountId: config.accountId, executionTarget: 'auth0-research', activity: 'skill-evolution' as const,
     action: 'execute' as const, paths: ['Community/Comments/example/comment.md'], now: Date.now() };
   expect(owner.policy().decision(request).allowed).toBe(false);
   await resource.withResearchSession(authorization, principal, async () => {
-    expect(owner.policy().decision(request).allowed).toBe(true);
-    expect(owner.policy().decision({ ...request, paths: ['Private/secret.md'] }).allowed).toBe(false);
-    expect(owner.policy().decision({ ...request, activity: 'skill-evolution' }).allowed).toBe(false);
+    expect(owner.execution(principal)).toEqual({ accountId: config.accountId, executionTarget: 'auth0-research' });
+    expect(owner.policy().decision(request).allowed).toBe(false);
     const clock = vi.spyOn(Date, 'now').mockReturnValue(exp * 1000);
     try {
       expect(owner.execution(principal)).toBeUndefined();

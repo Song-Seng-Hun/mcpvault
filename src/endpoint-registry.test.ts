@@ -90,12 +90,12 @@ test('capability ordering is deterministic but mutating the same capability set 
 
 test('owner consent locks optional schemas and active-only listings exclude them', () => {
   const registry = new EndpointRegistry();
-  registry.setTools([tool('list_blog_posts'), tool('read_note')], {}, new Set());
+  registry.setTools([tool('resolve_skill'), tool('read_note')], {}, new Set());
   const ownerActivity = { policyFingerprint: 'a'.repeat(64), executionBindingGeneration: 'b'.repeat(32), eligibility: {
-    collaboration: { discover: false, read: false, claim: false, execute: false },
+    'skill-evolution': { discover: false, read: false, claim: false, execute: false },
   } } as NonNullable<EndpointAvailabilityContext['ownerActivity']>;
-  const current = context({ ownerActivity });
-  expect(registry.list('community.posts', 1, 20000, current, false).endpoints[0]).toMatchObject({
+  const current = context({ ownerActivity, skillEvolutionEnabled: true });
+  expect(registry.list('skill.resolve', 1, 20000, current, false).endpoints[0]).toMatchObject({
     available: false, state: 'locked', reason: 'owner consent required',
   });
   expect(registry.list(undefined, 100, 20000, current, true).endpoints.map(item => item.endpointId))
@@ -118,8 +118,8 @@ test('owner consent never flips a parent lock or disabled mixed operation to rea
 });
 
 test('unregistered raw operation labels cannot downgrade owner activity while registered claim aliases remain claims', () => {
-  expect(ownerActionForEndpointTool('publish_blog_post', true, 'list')).toBe('execute');
-  expect(ownerActionForEndpointTool('publish_blog_post', true, 'search')).toBe('execute');
+  expect(ownerActionForEndpointTool('record_skill_experience', true, 'list')).toBe('execute');
+  expect(ownerActionForEndpointTool('record_skill_experience', true, 'search')).toBe('execute');
   expect(ownerActionForEndpointTool('claim_work_task', true, 'release')).toBe('claim');
 });
 
@@ -197,14 +197,14 @@ test('search and active-only cursors remain bound to their request after warming
   expect(registry.list(' ENTRY ', 1, 2000, context(), false, { compact: true, cursor: result.nextCursor }).endpoints[0]!.endpointId).toBe('mcp.entry_two');
 });
 
-test('fixed control tools stay excluded while exact IDs, legacy aliases and routes still resolve', () => {
+test('fixed control tools stay excluded while exact IDs and routes still resolve', () => {
   const registry = new EndpointRegistry();
   const controls = ['orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint'];
-  registry.setTools([...controls, 'publish_blog_post', 'read_note', 'update_task'].map(tool), {}, new Set(['publish_blog_post', 'update_task']));
+  registry.setTools([...controls, 'write_note', 'read_note', 'update_task'].map(tool), {}, new Set(['write_note', 'update_task']));
   compact(registry);
   expect(registry.size()).toBe(3);
   for (const name of controls) expect(registry.resolve(`mcp.${name}`)).toBeUndefined();
-  expect(registry.list('create discussion', 1, 2000, context(), false).endpoints[0]!.endpointId).toBe('community.post');
+  expect(registry.list('notes.write', 1, 2000, context(), false).endpoints[0]!.endpointId).toBe('notes.write');
   expect(registry.list('please show `notes.read`', 1, 2000, context(), false).endpoints[0]!.input).toBeDefined();
   expect(registry.resolveRoute('POST', '/api/notes/tasks')!.endpoint.endpointId).toBe('notes.task_update');
   expect(registry.resolveRoute('GET', '/api/notes/folder/note.md')!.pathArguments).toEqual({ path: 'folder/note.md' });

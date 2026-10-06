@@ -33,7 +33,7 @@ async function fixture() {
 test('public pulse uses its one complete schema including notice receipts and relevant skill', async () => {
   const { client } = await fixture();
   const tools = (await client.listTools()).tools;
-  expect(tools).toHaveLength(16);
+  expect(tools).toHaveLength(12);
   const schema = tools.find(t => t.name === 'get_agent_pulse')!.inputSchema;
   expect(schema.properties).toHaveProperty('knownNoticeRevisions');
   expect(schema.properties).toHaveProperty('noticeTopic');
@@ -46,7 +46,7 @@ test('an unchanged notice receipt reaches work while a changed notice is offered
   const { call, vault } = await fixture();
   const first = await call('orient_wiki');
   const read = await call('call_endpoint', first.primaryAction);
-  const args = { purpose: 'work', knownNoticeRevisions: { welcome: read.revision }, maxChars: 3000 };
+  const args = { knownNoticeRevisions: { welcome: read.revision }, maxChars: 3000 };
   const continued = await call('get_agent_pulse', args);
   expect(continued.protocol).not.toBe('mcpvault-notice/v1');
   expect(JSON.stringify(continued).length).toBeLessThanOrEqual(3000);

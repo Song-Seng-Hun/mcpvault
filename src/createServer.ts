@@ -18,8 +18,6 @@ import { RetrievalService } from './retrieval-service.js';
 import { OBSERVED_ENDPOINTS } from './evolution/operations.js';
 import { LayeredMemoryService } from './layered-memory.js';
 import { getLayeredMemoryTools } from './layered-memory-tools.js';
-import { CommunityParticipationService } from './community-participation.js';
-import { getCommunityParticipationTools, PARTICIPATION_MUTATING_TOOLS } from './community-participation-tools.js';
 import { QuestionPacketService } from './question-packet.js';
 import { SourceComparisonService } from './source-comparison.js';
 import { SourceChangeService } from './source-change.js';
@@ -58,21 +56,11 @@ import { documentPolicyPath, type DocumentAuthorityOptions } from './document-au
 import { getScopeAuthTools, SCOPE_AUTH_MUTATING_TOOLS, SCOPE_AUTH_TOOL_NAMES } from "./scope-auth-tools.js";
 import { LlmWikiService } from "./llm-wiki.js";
 import { getLlmWikiTools, LLM_WIKI_MUTATING_TOOLS } from "./llm-wiki-tools.js";
-import { SocialService } from "./social.js";
 import { readEnterpriseVaultMarker } from './enterprise-vault-marker.js';
-import { getSocialTools, SOCIAL_MUTATING_TOOLS } from "./social-tools.js";
-import { ChatService } from "./chat.js";
-import { getChatTools, CHAT_MUTATING_TOOLS } from "./chat-tools.js";
 import { ReferenceService } from "./references.js";
 import { getReferenceTools } from "./reference-tools.js";
-import { WhisperService } from "./whisper.js";
-import { getWhisperTools, WHISPER_MUTATING_TOOLS } from "./whisper-tools.js";
-import { CommunityStatusService } from "./community-status.js";
-import { COMMUNITY_STATUS_MUTATING_TOOLS, getCommunityStatusTools } from "./community-status-tools.js";
 import { AgentDirectoryService } from "./agent-directory.js";
 import { AGENT_DIRECTORY_MUTATING_TOOLS, getAgentDirectoryTools } from "./agent-directory-tools.js";
-import { NotificationService } from "./notifications.js";
-import { NOTIFICATION_MUTATING_TOOLS, getNotificationTools } from "./notification-tools.js";
 import { AuditService } from "./audit.js";
 import { getAuditTools } from "./audit-tools.js";
 import { AgentTaskService } from "./agent-tasks.js";
@@ -98,14 +86,10 @@ import { withGuidance, projectGuidance, guidanceText, renderGuidanceError } from
 import { WorkService } from './work-service.js';
 import { ReviewedSkillService, type ReviewedSkillInspector } from './skill-release-service.js';
 import type { ReviewedSkillHost, ReviewedSkillDeliveryFence } from './skill-release-reader.js';
-import { CommunityFeaturesService } from "./community-features.js";
-import { COMMUNITY_FEATURE_MUTATING_TOOLS, getCommunityFeatureTools } from "./community-feature-tools.js";
 import { ObsidianSearchService } from "./obsidian-search.js";
 import { getObsidianSearchTools } from "./obsidian-search-tools.js";
 import { AgentPulseService } from "./agent-pulse.js";
 import { getAgentPulseTools } from "./agent-pulse-tools.js";
-import { ContextService } from "./context.js";
-import { getContextTools } from "./context-tools.js";
 import { ContinuityService } from "./continuity.js";
 import { CONTINUITY_MUTATING_TOOLS, getContinuityTools } from "./continuity-tools.js";
 import { ModerationService } from "./moderation.js";
@@ -113,8 +97,6 @@ import { MODERATION_MUTATING_TOOLS, getModerationTools } from "./moderation-tool
 import { isManagedCommunityPath, isModerationHidden, moderationStatus } from "./moderation-policy.js";
 import { WikiViewService } from './wiki-views.js';
 import { MocRegionService } from './wiki-moc-regions.js';
-import { ReputationService } from "./reputation.js";
-import { REPUTATION_MUTATING_TOOLS, getReputationTools } from "./reputation-tools.js";
 import { SemanticSearchService } from "./semantic-search.js";
 import { cleanupStaleDerivedTemps } from './derived-temp-cleanup.js';
 import { normalizeSearchMaxChars } from "./search-limits.js";
@@ -311,20 +293,12 @@ const MUTATING_TOOLS = new Set([
   ...COLLABORATION_MUTATING_TOOLS,
   ...SCOPE_AUTH_MUTATING_TOOLS,
   ...LLM_WIKI_MUTATING_TOOLS,
-  ...SOCIAL_MUTATING_TOOLS,
-  ...CHAT_MUTATING_TOOLS,
-  ...WHISPER_MUTATING_TOOLS,
-  ...COMMUNITY_STATUS_MUTATING_TOOLS,
   ...AGENT_DIRECTORY_MUTATING_TOOLS,
-  ...NOTIFICATION_MUTATING_TOOLS,
   ...AGENT_TASK_MUTATING_TOOLS,
   ...WORK_MUTATING_TOOLS,
   'revise_notice',
-  ...PARTICIPATION_MUTATING_TOOLS,
-  ...COMMUNITY_FEATURE_MUTATING_TOOLS,
   ...CONTINUITY_MUTATING_TOOLS,
   ...MODERATION_MUTATING_TOOLS,
-  ...REPUTATION_MUTATING_TOOLS,
   "update_task",
 ]);
 
@@ -347,7 +321,6 @@ const CAPABILITY_FOR_TOOL: Partial<Record<string, ScopeCapability>> = {
   daily_note: "write",
   restore_note_revision: "write",
   commit_changes: "write",
-  write_journal_entry: "journal",
   initialize_llm_wiki: "publish",
   ingest_source: "publish",
   capture_wiki_note: "publish",
@@ -364,28 +337,7 @@ const CAPABILITY_FOR_TOOL: Partial<Record<string, ScopeCapability>> = {
   resolve_wiki_issue: "status",
   export_wiki_base: "write",
   export_wiki_canvas: "write",
-  publish_blog_post: "publish",
-  delete_blog_post: "publish",
-  comment_on_blog_post: "comment",
-  edit_blog_comment: "comment",
-  delete_blog_comment: "comment",
-  toggle_reaction: "comment",
-  accept_blog_comment: "status",
-  unaccept_blog_comment: "status",
-  write_guestbook_entry: "comment",
-  delete_guestbook_entry: "comment",
-  watch_target: "comment",
-  unwatch_target: "comment",
-  create_chat_room: "chat",
-  send_chat_message: "chat",
-  edit_chat_message: "chat",
-  delete_chat_message: "chat",
-  archive_chat_room: "chat",
-  send_whisper: "whisper",
-  update_community_status: "status",
   update_agent_profile: "profile",
-  manage_community_participation: "profile",
-  record_community_participation: "profile",
   create_agent_task: "task",
   manage_work_project: 'task',
   record_skill_experience: 'write', manage_skill_candidate: 'write', evaluate_skill: 'write', promote_skill: 'write', rollback_skill: 'write',
@@ -478,15 +430,8 @@ function ownerRequestPaths(toolName: string, args: Record<string, any>): readonl
     else if (Array.isArray(value)) for (const item of value) add(item);
   };
   for (const [key, value] of Object.entries(args)) {
-    // Feedback source locations describe repository code, not Vault reads.
-    // The social service validates these annotations; its actual IO remains
-    // guarded by the active owner lease and document policy.
-    if (key === 'sourcePaths' && toolName === 'publish_blog_post') continue;
     if (/(?:^|_)(?:path|paths|sourcePaths|evidencePaths|references|targetPath)$/i.test(key)) add(value);
   }
-  // Federated object IDs are opaque identities, not local filenames. The
-  // federation storage adapter checks its resolved physical path under lease.
-  if (typeof args.slug === 'string' && !args.slug.startsWith('post:') && /blog_post|blog_posts/.test(toolName)) add(`Community/Posts/${args.slug}.md`);
   if (result.size > 32) throw guidanceError(new Error('Owner activity path budget exceeded'), 'guid-4649dae5c45131ae');
   if (result.size) return Object.freeze([...result]);
   return ownerActionForEndpointTool(toolName, MUTATING_TOOLS.has(toolName)) === 'discover' ? undefined : Object.freeze([]);
@@ -496,7 +441,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const features = parseHostFeatureConfig(options.features ?? DEFAULT_HOST_FEATURE_CONFIG);
   const selectedFeatures = new Set(features.selected);
   const ownerActivityRuntime = new OwnerActivityRuntime(options.ownerActivity);
-  const catalogActivities: readonly Activity[] = ['collaboration', 'skill-evolution'];
+  const catalogActivities: readonly Activity[] = ['skill-evolution'];
   const catalogActions: readonly OwnerActivityAction[] = ['discover', 'read', 'claim', 'execute'];
   const ownerCatalogSnapshot = (principal?: ScopePrincipal): NonNullable<EndpointAvailabilityContext['ownerActivity']> => {
     if (!options.ownerActivity) return { policyFingerprint: 'absent', executionBindingGeneration: 'absent', eligibility: {} };
@@ -519,10 +464,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     return ownerCatalogSnapshot(principal);
   };
   const hasFeature = (feature: HostFeatureId) => selectedFeatures.has(feature);
-  // Journal/saved-item methods share storage helpers with social methods,
-  // but need no social indexes or subscriptions.
   const needsTaskRecords = hasFeature('work-management');
-  const needsPersonalStorage = hasFeature('personal-memory') || hasFeature('collaboration');
   const featureToolAllowed = (tool: string) => {
     const feature = hostFeatureForTool(tool);
     return feature !== undefined && hasFeature(feature);
@@ -618,9 +560,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     metadataIndex.invalidateMany(changes);
     searchService.invalidateMany(changes);
     semanticSearch.notifyChanges(changes);
-    reputationCache?.invalidateMany(changes);
-    notificationsCache?.invalidateMany(changes);
-    communityFeaturesCache?.invalidateMany(changes);
     llmWikiCache?.invalidate(changes);
     graphIndex.invalidateMany(changes);
     void memoryIndex?.invalidate(changes);
@@ -635,9 +574,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     readModelFlushQueued = true;
     queueMicrotask(flushReadModelChanges);
   };
-  let reputationCache: ReputationService | undefined;
-  let notificationsCache: NotificationService | undefined;
-  let communityFeaturesCache: CommunityFeaturesService | undefined;
   let llmWikiCache: LlmWikiService | undefined;
   const fileSystem = new FileSystemService(
     resolvedVaultPath,
@@ -714,44 +650,20 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   }, readOnly);
   void refreshDocumentPolicy().then(() => mocRegions.start()).then(() => mocRegions.flush()).catch(() => { /* Invalid protected policy or registration disables automation; explicit reads report the error. */ });
   if (referenceImpactIndex) void refreshDocumentPolicy().then(() => referenceImpactIndex?.start()).catch(() => { /* Incomplete integrity stays unavailable, never an empty scan. */ });
-  const reputation = hasFeature('collaboration') ? new ReputationService(fileSystem, scopeAuth, moderation) : undefined;
-  reputationCache = reputation;
-  const notifications = reputation ? new NotificationService(fileSystem, reputation, resolvedVaultPath, fileCatalog) : undefined;
-  notificationsCache = notifications;
-  const social = needsPersonalStorage ? new SocialService(fileSystem, scopeAccess, references, reputation, notifications, {
-    noticeFeedback: (id, revision, principal) => notices.feedback(id, revision, principal),
-    noticeFeedbackReview: (id, path, revision, principal) => notices.feedbackReview(id, path, revision, principal),
-  }) : undefined;
-  const chat = hasFeature('collaboration') ? new ChatService(fileSystem, references, reputation!) : undefined;
-  const whispers = hasFeature('collaboration') ? new WhisperService(fileSystem, references) : undefined;
-  const communityStatus = hasFeature('collaboration') ? new CommunityStatusService(fileSystem) : undefined;
   const agentDirectory = new AgentDirectoryService(fileSystem, scopeAuth);
   const audit = new AuditService(resolvedVaultPath);
   const agentTasks = needsTaskRecords ? new AgentTaskService(fileSystem, references, scopeAuth, scopeAccess) : undefined;
-  const communityFeatures = needsPersonalStorage ? new CommunityFeaturesService(fileSystem, scopeAccess, scopeAuth, reputation, resolvedVaultPath, notifications, hasFeature('collaboration') ? fileCatalog : undefined) : undefined;
-  communityFeaturesCache = communityFeatures;
   // The lexical, metadata, graph, and semantic indexes subscribe to the
   // catalog themselves. The remaining derived views are intentionally kept
   // behind this one fan-out so edits made directly by Obsidian (or another
-  // process) cannot leave notifications, reputation, community discovery,
-  // or Wiki catalog/lint caches stale until a restart.
+  // process) cannot leave Wiki catalog/lint caches stale until a restart.
   const readModelCatalogUnsubscribe = fileCatalog.subscribeBatch(changes => {
     void maintenance.notify(changes).catch(() => undefined);
     void compilation.notify(changes?.map(change => change.path)).catch(() => undefined);
     void mocRegions.notify(changes).catch(() => undefined);
-    if (changes) {
-      reputationCache?.invalidateMany(changes);
-      notificationsCache?.invalidateMany(changes);
-      communityFeaturesCache?.invalidateMany(changes);
-    } else {
-      reputationCache?.invalidateMany();
-      notificationsCache?.invalidateMany();
-      communityFeaturesCache?.invalidateMany();
-    }
     llmWikiCache?.invalidate(changes);
   });
   const obsidianSearch = new ObsidianSearchService(resolvedVaultPath, pathFilter, scopeAccess, vaultIo);
-  const context = hasFeature('collaboration') ? new ContextService(social!, chat!) : undefined;
   const continuity = new ContinuityService(fileSystem, {
     access: scopeAccess,
     buildLearningPath: (principal, path, maxDepth, limit, maxChars) => llmWiki.learningPath(principal, path, maxDepth, limit, maxChars, true),
@@ -767,8 +679,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     assertActor: async principal => {
       if (await moderation.isBanned(principal.accountId, principal.userId)) throw guidanceError(new Error('This account is suspended by moderation'), 'guid-3ce72ccf715bd653');
     },
-  }) : undefined;
-  const participation = hasFeature('collaboration') ? new CommunityParticipationService(fileSystem, { access: scopeAccess, ...(notifications && { notifications }),
   }) : undefined;
   const skillEvolution = hasFeature('skill-evolution') ? new SkillEvolutionService(fileSystem, scopeAccess, scopeAuth, options.skillEvolution, {
     readOnly,
@@ -786,9 +696,9 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     }) : undefined;
   if (reviewedSkills) retrieval.attachReviewedProcedures(reviewedSkills);
   const reviewedSourceAccess = Boolean(reviewedSkills && options.reviewedSkills?.authorization);
-  const agentPulse = new AgentPulseService(notifications, hasFeature('collaboration') ? social : undefined, chat,
-    hasFeature('work-management') ? agentTasks : undefined, continuity, reputation, llmWiki,
-    hasFeature('work-management') ? work : undefined, participation, skillEvolution,
+  const agentPulse = new AgentPulseService(
+    hasFeature('work-management') ? agentTasks : undefined, continuity, llmWiki,
+    hasFeature('work-management') ? work : undefined, skillEvolution,
     async (activity, principal) => {
       const operation = await ownerActivityRuntime.begin(activity, 'discover', undefined, principal);
       if (!operation.canAccessPath('.')) return undefined;
@@ -1105,29 +1015,20 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getCompilationTools(),
         ...getEvolutionTools(),
         ...getFidelityTools(),
-        ...getSocialTools(),
         ...getLayeredMemoryTools(),
-        ...getCommunityParticipationTools(),
-        ...getChatTools(),
         ...getDocumentTools(),
         ...getNoticeTools(),
         ...getReferenceTools(),
-        ...getWhisperTools(),
-        ...getCommunityStatusTools(),
         ...getAgentDirectoryTools(),
-        ...getNotificationTools(),
         ...getAuditTools(),
         ...getAgentTaskTools(),
         ...getWorkTools(),
         ...getConfigurationTools(),
         ...getSkillEvolutionTools(),
-        ...getCommunityFeatureTools(),
         ...getObsidianSearchTools(),
         ...getAgentPulseTools(),
-        ...getContextTools(),
         ...getContinuityTools(),
         ...getModerationTools(),
-        ...getReputationTools(),
         {
           name: "list_all_tags",
           description: guidanceText('guid-499e41ddd96b2247', "Discover caller-visible, non-hidden tags in bounded {tags,total,returned,offset,snapshotFingerprint,truncated,nextAction} pages. Counts are occurrences, not distinct notes. Combines Properties and body Unicode/nested tags; ignores fenced/inline examples and escaped hashes. Sorted by count then ordinal tag. Follow nextAction, retaining authentication locally; changed tag views require restart. Exact labels are never clipped. Advisory derived view, not an atomic source inventory."),
@@ -1540,8 +1441,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
       // Check the canonical registration BEFORE read aliases; aliases never grant selection.
       const registrationName = toolName === 'read_work_group' ? 'manage_work_group'
-        : toolName === 'read_work_project' ? 'manage_work_project'
-        : toolName === 'read_community_participation' ? 'manage_community_participation' : toolName;
+        : toolName === 'read_work_project' ? 'manage_work_project' : toolName;
       ownerRegistrationName = registrationName;
       if (!featureToolAllowed(registrationName)) throw guidanceError(new Error('Endpoint feature is disabled or unavailable in this host selection'), 'guid-e735b30a3e528734');
       toolName = operationReadAlias(toolName, rawArgs.op) || toolName;
@@ -1657,7 +1557,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         assertFresh: () => { assertStorageFresh(); ownerOperation?.assertFresh(); }, observe: observeDocument, inherit: inheritDocument,
         ...(ownerOperation && { canAccessPath: ownerOperation.canAccessPath, canTraversePath: ownerOperation.canTraversePath,
           beforeWrite: ownerOperation.beforeWrite }) }, async () => {
-      const communityReceipt = (value: Record<string, unknown>) => jsonResult(value, trimmedArgs.prettyPrint);
       if (Object.hasOwn(DOCUMENT_TOOL_ENDPOINTS, toolName)) {
         // This service owns scope URI resolution. trimPaths has already expanded
         // legacy adapter paths and must not feed private physical paths back in.
@@ -1807,39 +1706,11 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             ...(principal && { principal }),
             limit: trimmedArgs.limit,
             maxChars: trimmedArgs.maxChars,
-            ...(trimmedArgs.purpose !== undefined && { purpose: trimmedArgs.purpose }),
             ...(trimmedArgs.hostBusy !== undefined && { hostBusy: trimmedArgs.hostBusy }),
             ...(trimmedArgs.skillId !== undefined && { skillId: trimmedArgs.skillId }),
           }, validator => { finalOwnerRefresh = validator.revalidate; finalOwnerValidator = validator.assertFresh; });
           if (principal && scopeAuth.authenticate(rawArgs.accessToken)?.accountId !== principal.accountId) throw guidanceError(new Error('Session expired during pulse; login again'), 'guid-5051af441248af37');
-          return jsonResult(packet, trimmedArgs.purpose === 'community' ? false : trimmedArgs.prettyPrint);
-        }
-
-        case 'read_community_participation':
-        case 'manage_community_participation': {
-          const packet = await requiredService(participation).settings({ ...trimmedArgs, principal, ...(toolName === 'read_community_participation' && { op: 'read' }), authorize: () => { if (!principal || JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw guidanceError(new Error('Participation authentication changed'), 'guid-d130c9cb9e9dbb37'); } });
-          if (!principal || scopeAuth.authenticate(rawArgs.accessToken)?.accountId !== principal.accountId) throw guidanceError(new Error('Session expired during participation read'), 'guid-1fd7c5c41175ae9b');
-          return jsonResult(packet, false);
-        }
-        case 'record_community_participation': {
-          const packet = await requiredService(participation).record({ ...trimmedArgs, principal, authorize: () => { if (!principal || JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw guidanceError(new Error('Participation authentication changed'), 'guid-d130c9cb9e9dbb37'); } } as any);
-          if (!principal || JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw guidanceError(new Error('Participation authentication changed'), 'guid-d130c9cb9e9dbb37');
-          return jsonResult(packet, false);
-        }
-
-        case "read_context": {
-          return jsonResult(await requiredService(context).read({
-            ...(principal && { principal }),
-            targetType: trimmedArgs.targetType as any,
-            ...(typeof trimmedArgs.slug === 'string' && { slug: trimmedArgs.slug }),
-            ...(typeof trimmedArgs.commentId === 'string' && { commentId: trimmedArgs.commentId }),
-            ...(typeof trimmedArgs.roomId === 'string' && { roomId: trimmedArgs.roomId }),
-            ...(typeof trimmedArgs.messageId === 'string' && { messageId: trimmedArgs.messageId }),
-            ...(trimmedArgs.contextBefore !== undefined && { contextBefore: trimmedArgs.contextBefore as number }),
-            ...(trimmedArgs.contextAfter !== undefined && { contextAfter: trimmedArgs.contextAfter as number }),
-            ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars as number }),
-            ...(trimmedArgs.includeReferences !== undefined && { includeReferences: trimmedArgs.includeReferences as boolean }),
-          }), trimmedArgs.prettyPrint);
+          return jsonResult(packet, trimmedArgs.prettyPrint);
         }
 
         case "save_work_state": {
@@ -2583,23 +2454,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           }), trimmedArgs.prettyPrint);
         }
 
-        case "write_journal_entry": {
-          return jsonResult(await requiredService(social).writeJournalEntry({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-        }
-
-        case "list_journal_entries":
-        case "read_journal_entry": {
-          const result = toolName === 'list_journal_entries'
-            ? await requiredService(social).listJournalEntries({ ...trimmedArgs, principal })
-            : await requiredService(social).readJournalEntry({ ...trimmedArgs, principal });
-          if (principal && JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw guidanceError(new Error('Journal authentication changed; login again before reading'), 'guid-49ab02be711a3444');
-          return jsonResult(result, trimmedArgs.prettyPrint);
-        }
-
-        case "publish_blog_post": {
-          return communityReceipt(await requiredService(social).publishBlogPost({ ...trimmedArgs, principal }));
-        }
-
         case 'list_guidance_catalog': {
           return jsonResult(guidance.list(trimmedArgs, path => scopeAccess.canAccessPhysicalPath(path, principal)), false);
         }
@@ -2612,138 +2466,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           return jsonResult(result, false);
         }
 
-        case "delete_blog_post": {
-          return communityReceipt(await requiredService(social).deleteBlogPost({ ...trimmedArgs, principal }));
-        }
-
-        case "list_blog_posts": {
-          return jsonResult(await requiredService(social).listBlogPosts({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-        }
-
-        case "read_blog_post": {
-          return jsonResult(await requiredService(social).getBlogPost({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-        }
-
-        case "comment_on_blog_post": {
-          return communityReceipt(await requiredService(social).commentOnBlogPost({ ...trimmedArgs, principal }));
-        }
-
-        case "edit_blog_comment": {
-          return communityReceipt(await requiredService(social).editBlogComment({ ...trimmedArgs, principal }));
-        }
-
-        case "delete_blog_comment": {
-          return communityReceipt(await requiredService(social).deleteBlogComment({ ...trimmedArgs, principal }));
-        }
-
-        case "list_blog_comments": {
-          return jsonResult(await requiredService(social).listBlogComments({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-        }
-
-        case "list_mentions": {
-          return jsonResult(await requiredService(social).listMentions({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-        }
-
-        case "list_blog_series": {
-          return jsonResult(await requiredService(communityFeatures).listSeries(trimmedArgs), trimmedArgs.prettyPrint);
-        }
-
-        case "list_author_activity": {
-          return jsonResult(await requiredService(communityFeatures).authorActivity({ author: trimmedArgs.author, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars }), trimmedArgs.prettyPrint);
-        }
-
-        case "toggle_reaction": {
-          return jsonResult(await requiredService(communityFeatures).toggleReaction({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-        }
-
-        case "list_reactions": {
-          return jsonResult(await requiredService(communityFeatures).listReactions(trimmedArgs), trimmedArgs.prettyPrint);
-        }
-
-        case "list_popular_posts": {
-          return jsonResult(await requiredService(communityFeatures).listPopularPosts(trimmedArgs), trimmedArgs.prettyPrint);
-        }
-
-        case "accept_blog_comment":
-        case "unaccept_blog_comment": {
-          return jsonResult(await requiredService(communityFeatures).acceptComment({ ...trimmedArgs, principal, accepted: toolName === 'accept_blog_comment' }), trimmedArgs.prettyPrint);
-        }
-
-        case "write_guestbook_entry": {
-          return jsonResult(await requiredService(communityFeatures).guestbook({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-        }
-
-        case "list_guestbook": {
-          return jsonResult(await requiredService(communityFeatures).guestbook(trimmedArgs), trimmedArgs.prettyPrint);
-        }
-
-        case "delete_guestbook_entry": {
-          return jsonResult(await requiredService(communityFeatures).guestbook({ ...trimmedArgs, principal, deleteEntry: true }), trimmedArgs.prettyPrint);
-        }
-
-        case "watch_target":
-        case "unwatch_target": {
-          return jsonResult(await requiredService(communityFeatures).watch({ ...trimmedArgs, principal, active: toolName === 'watch_target' }), trimmedArgs.prettyPrint);
-        }
-
-        case "list_watched_targets": {
-          return jsonResult(await requiredService(communityFeatures).listWatches(principal, trimmedArgs.maxChars as number | undefined), trimmedArgs.prettyPrint);
-        }
-
-        case "save_item": {
-          return jsonResult(await requiredService(communityFeatures).save({ ...trimmedArgs, principal, active: true }), trimmedArgs.prettyPrint);
-        }
-
-        case "unsave_item": {
-          return jsonResult(await requiredService(communityFeatures).save({ ...trimmedArgs, principal, active: false }), trimmedArgs.prettyPrint);
-        }
-
-        case "list_saved_items": {
-          return jsonResult(await requiredService(communityFeatures).listSaves(principal, trimmedArgs.maxChars as number | undefined), trimmedArgs.prettyPrint);
-        }
-
         case "read_references": {
           return jsonResult(await references.readFromNote({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-        }
-
-        case "create_chat_room": {
-          return jsonResult(await requiredService(chat).createRoom({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-        }
-
-        case "list_chat_rooms": {
-          return jsonResult(await requiredService(chat).listRooms(trimmedArgs), trimmedArgs.prettyPrint);
-        }
-
-        case "send_chat_message": {
-          return jsonResult(await requiredService(chat).sendMessage({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-        }
-
-        case "edit_chat_message": {
-          return jsonResult(await requiredService(chat).editMessage({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-        }
-
-        case "delete_chat_message": {
-          return jsonResult(await requiredService(chat).deleteMessage({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-        }
-
-        case "archive_chat_room": {
-          return jsonResult(await requiredService(chat).archiveRoom({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-        }
-
-        case "read_chat_room": {
-          return jsonResult(await requiredService(chat).readRoomWithMessages({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-        }
-
-        case "send_whisper": {
-          return jsonResult(await requiredService(whispers).send({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-        }
-
-        case "list_whispers": {
-          return jsonResult(await requiredService(whispers).list({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-        }
-
-        case "update_community_status": {
-          return jsonResult(await requiredService(communityStatus).update({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
         case "report_content": {
@@ -2756,15 +2480,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
         case "moderate_content": {
           return jsonResult(await moderation.enforce({ ...(principal && { principal }), action: String(trimmedArgs.action), targetType: String(trimmedArgs.targetType), targetId: String(trimmedArgs.targetId), ...(trimmedArgs.postId !== undefined && { postId: String(trimmedArgs.postId) }), ...(trimmedArgs.roomId !== undefined && { roomId: String(trimmedArgs.roomId) }), reason: String(trimmedArgs.reason), ...(trimmedArgs.expectedRevision !== undefined && { expectedRevision: String(trimmedArgs.expectedRevision) }) }), trimmedArgs.prettyPrint);
-        }
-
-        case "get_reputation": {
-          const result = trimmedArgs.identity !== undefined
-            ? await requiredService(reputation).getPublic(String(trimmedArgs.identity))
-            : principal
-              ? await requiredService(reputation).getForPrincipal(principal)
-              : (() => { throw guidanceError(new Error('identity is required for anonymous reputation lookup'), 'guid-e950a246d244c855'); })();
-          return jsonResult(result, trimmedArgs.prettyPrint);
         }
 
         case "get_agent_profile": {
@@ -2788,24 +2503,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             bio: trimmedArgs.bio,
             interests: trimmedArgs.interests,
             availability: trimmedArgs.availability,
-            expectedRevision: trimmedArgs.expectedRevision,
-          }), trimmedArgs.prettyPrint);
-        }
-
-        case "list_notifications": {
-          return jsonResult(await requiredService(notifications).list({
-            ...(principal && { principal }),
-            includeRead: trimmedArgs.includeRead,
-            limit: trimmedArgs.limit,
-            maxChars: trimmedArgs.maxChars,
-            afterNotificationId: trimmedArgs.afterNotificationId,
-          }), trimmedArgs.prettyPrint);
-        }
-
-        case "mark_notifications_read": {
-          return jsonResult(await requiredService(notifications).markRead({
-            ...(principal && { principal }),
-            through: trimmedArgs.through,
             expectedRevision: trimmedArgs.expectedRevision,
           }), trimmedArgs.prettyPrint);
         }
@@ -3515,7 +3212,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       ownerOperation?.assertFresh();
       await finalOwnerRefresh?.();
       finalOwnerValidator?.();
-      const responseContract = endpointRegistry.resolve(toolName === 'read_work_group' ? 'work.group' : toolName === 'read_work_project' ? 'work.project' : toolName === 'read_community_participation' ? 'community.participation' : endpointIdForTool(toolName))?.input;
+      const responseContract = endpointRegistry.resolve(toolName === 'read_work_group' ? 'work.group' : toolName === 'read_work_project' ? 'work.project' : endpointIdForTool(toolName))?.input;
       const responseBudget = trimmedArgs.maxChars ?? (toolName === 'search_capabilities' ? 20000 : toolName === 'get_wiki_answer_packet' && trimmedArgs.query === undefined ? 7000 : undefined);
       const budget = normalizedResponseBudget(responseBudget, responseContract);
       if (!('isError' in toolResponse && toolResponse.isError) && (viewRequested || mcpPresentation && requestedToolName === 'call_endpoint' && toolName === 'get_wiki_organization_manifest' && Buffer.byteLength(JSON.stringify(toolResponse)) > 5000)) {
@@ -3601,7 +3298,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
   const closeServer = server.close.bind(server);
   const disconnectCodexHooks = connectCodexHooks(options.codexHooks, { fs: fileSystem, access: scopeAccess, continuity,
-    questionPacket, compilation, ...(participation && { participation }), authorize: compilationAuthorize, ownerActivity: ownerActivityRuntime }, readOnly);
+    questionPacket, compilation, authorize: compilationAuthorize }, readOnly);
   server.close = async () => {
     const failures: unknown[] = [];
     // Preserve order, but never let a refused foreign-lock cleanup strand the
@@ -3610,7 +3307,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       () => maintenance.close(), () => compilation.close(), () => llmWiki.invalidate(), () => documentSearch?.close(),
       () => documentIndex?.close(), () => memoryIndex?.close(), () => referenceImpactIndex?.close(), () => mocRegions.close(), () => metadataIndex.close(),
       () => searchService.close(), () => semanticSearch.close(), () => graphIndex.close(),
-      () => notifications?.close(), () => communityFeatures?.close(), () => fileCatalog.close(), closeServer]) {
+      () => fileCatalog.close(), closeServer]) {
       try { await close(); } catch (error) { failures.push(error); }
     }
     if (failures.length) throw new AggregateError(failures, 'Runtime cleanup reported failures; protected recovery data was preserved');

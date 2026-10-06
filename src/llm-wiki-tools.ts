@@ -743,7 +743,7 @@ export function getLlmWikiTools(): Tool[] {
       description: guidanceText('guid-c5b27548d1b6d5a1', 'Return a small optional Obsidian Markdown/Properties scaffold for a common note kind or a concept, argument, model, observation, or counterargument knowledge role. It never creates a file and never makes templates mandatory.'),
       inputSchema: { type: 'object', properties: {
         authoring: { type: 'object', description: guidanceText('guid-11e797ea6f9b2a0f', 'Optional contextual input checklist and exact existing executor. Values are inert data, not template code.'), properties: {
-          intent: { type: 'string', enum: ['knowledge', 'capture', 'reply', 'new_topic'] }, slug: { type: 'string', maxLength: 120 }, provided: { type: 'object', maxProperties: 20 },
+          intent: { type: 'string', enum: ['knowledge', 'capture'] }, provided: { type: 'object', maxProperties: 20 },
         }, additionalProperties: false },
         noteKind: { type: 'string', enum: [...NOTE_TEMPLATE_IDS], default: 'atomic', description: guidanceText('guid-eeb37d3399909c59', 'Template ID; role templates still use ordinary atomic/knowledge notes plus knowledge_role') },
         maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint,

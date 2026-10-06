@@ -3,7 +3,7 @@ import { compilationPath } from './compilation-policy.js';
 
 export const CODEX_HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'PreCompact', 'PostCompact', 'Stop', 'SessionEnd', 'Interrupt'] as const;
 export type CodexHookEventName = typeof CODEX_HOOK_EVENTS[number];
-export const CODEX_HOOK_ACTIONS = ['resume', 'search', 'candidate', 'checkpoint', 'compilation', 'community'] as const;
+export const CODEX_HOOK_ACTIONS = ['resume', 'search', 'candidate', 'checkpoint', 'compilation'] as const;
 export type CodexHookAction = typeof CODEX_HOOK_ACTIONS[number];
 export interface CodexHookEvent { event: CodexHookEventName; sessionId: string; reentrant: boolean }
 export interface CodexHookProject { id: string; workspace: string; definitionHash: string; events: CodexHookEventName[]; actions: CodexHookAction[]; paths: string[] }

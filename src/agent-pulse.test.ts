@@ -51,27 +51,13 @@ async function json(client: Client, name: string, arguments_: Record<string, unk
 function unitPulseService(options: {
   ownerConsent?: boolean;
   workState?: Record<string, unknown>;
-  activePosts?: Array<Record<string, unknown>>;
-  notifications?: Array<Record<string, unknown>>;
-  notificationNextCursor?: string;
-  onNotificationList?: (params: Record<string, unknown>) => void;
   maintenanceGeneration?: () => number;
   reviewPacket: () => Promise<Record<string, unknown>>;
   synthesisCandidates?: (...args: any[]) => Promise<Record<string, unknown>>;
 }) {
-  const activePosts = options.activePosts || [];
-  const notifications = options.notifications || [];
   return new AgentPulseService(
-    { list: async (params: Record<string, unknown>) => {
-      options.onNotificationList?.(params);
-      const requestedLimit = Number(params.limit) || notifications.length;
-      return { notifications: notifications.slice(0, requestedLimit), unreadCount: notifications.length, nextCursor: options.notificationNextCursor };
-    } } as any,
-    { pulsePosts: async () => ({ ownPublishedPosts: 0, activePosts, activeTotal: activePosts.length, feedbackPosts: [], feedbackTotal: 0, forumPosts: [], forumTotal: 0 }) } as any,
-    { listRooms: async () => ({ rooms: [], total: 0 }) } as any,
     { listAssignedOpen: async () => ({ tasks: [], total: 0, statusCounts: { in_progress: 0, accepted: 0, proposed: 0, blocked: 0 } }) } as any,
     { read: async () => options.workState || { exists: false } } as any,
-    { getForPrincipal: async () => ({ level: 0, xp: 0, label: 'Newcomer' }) } as any,
     {
       reviewQueue: async () => ({ items: [], total: 0, truncated: false }),
       inbox: async () => ({ items: [], total: 0, truncated: false }),
@@ -79,7 +65,7 @@ function unitPulseService(options: {
       reviewPacket: options.reviewPacket,
       synthesisCandidates: options.synthesisCandidates || (async () => ({ items: [], total: 0, truncated: false })),
     } as any,
-    undefined, undefined, undefined,
+    undefined, undefined,
     // Routing tests explicitly admit optional activity; production defaults
     // remain fail-closed and are separately exercised without this fixture.
     async () => options.ownerConsent === false ? undefined : ({
@@ -88,19 +74,6 @@ function unitPulseService(options: {
     }),
   );
 }
-
-test('unit routing without owner consent skips optional notification reads', async () => {
-  let notificationReads = 0;
-  const pulse = unitPulseService({ ownerConsent: false,
-    notifications: [{ sourceType: 'blog_post', sourceId: 'unapproved-post' }],
-    onNotificationList: () => { notificationReads++; },
-    reviewPacket: async () => ({}),
-  });
-  const result = await pulse.get({ principal: { accountId: 'reader', modelId: 'codex', role: 'model' } as any });
-  expect(notificationReads).toBe(0);
-  expect(result.coverage.notifications).toEqual({ state: 'skipped' });
-  expect(JSON.stringify(result)).not.toContain('unapproved-post');
-});
 
 test('anonymous pulse routes to complete conditional onboarding without demanding registration', async () => {
   const { server, client } = await setup();
@@ -169,7 +142,7 @@ test.each([512, 700, 1200, 3000])('public onboarding MCP read at %i preserves sa
       expect(policy.value.rules.join(' ')).toContain('12 characters');
     }
     const rejected = await client.callTool({ name: 'call_endpoint', arguments: {
-      endpointId: 'community.comment', arguments: { slug: 'self-introductions', content: 'Anonymous reading grants no write permission.' },
+      endpointId: 'notes.write', arguments: { path: 'Knowledge/Anonymous.md', content: 'Anonymous reading grants no write permission.', expectedRevision: 'missing' },
     } });
     expect(rejected.isError).toBe(true);
   }
@@ -209,65 +182,6 @@ test('orientation exposes exactly one bounded public action instead of a preload
   }
 });
 
-test('a first-time session-agent can register without a parent token and use the returned token', async () => {
-  const { server, client } = await setup();
-  {
-    const host = await json(client, 'register_scope_account', {
-      accountId: 'intro-host', modelId: 'claude', password: 'intro-host-password-123',
-    });
-    await json(client, 'publish_blog_post', {
-      slug: 'self-introductions', title: 'Introduce yourself here', content: 'Reply with your research interests.',
-      expectedRevision: 'missing', accessToken: host.value.accessToken,
-    });
-    const registration = await json(client, 'register_scope_account', {
-      accountId: 'codex-worker-a1', modelId: 'codex', agentId: 'codex-worker-a1', password: 'pulse-agent-password-123',
-    });
-    expect(registration.value).toMatchObject({
-      success: true,
-      principal: { accountId: 'codex-worker-a1', modelId: 'codex', agentId: 'codex-worker-a1', role: 'agent' },
-    });
-    expect(typeof registration.value.accessToken).toBe('string');
-    const pulse = await json(client, 'get_agent_pulse', { accessToken: registration.value.accessToken });
-    expect(pulse.value).toMatchObject({ state: 'ready', identity: { agentId: 'codex-worker-a1', role: 'agent' } });
-    expect(pulse.value.nextAction).toMatchObject({
-      tool: 'community.post_read', arguments: { slug: 'self-introductions' }, followUpTool: 'community.comment',
-    });
-    const graph = await json(client, 'call_endpoint', {
-      endpointId: 'wiki.graph_health', accessToken: registration.value.accessToken,
-      arguments: { limit: 10, maxChars: 16000 },
-    });
-    expect(graph.result.isError).toBeFalsy();
-    expect(graph.value.orphanNotes.items).toEqual(expect.arrayContaining([
-      expect.objectContaining({ path: 'Community/Posts/self-introductions.md' }),
-    ]));
-    const comment = await json(client, 'comment_on_blog_post', {
-      slug: 'self-introductions',
-      content: '저는 codex-worker-a1입니다. 에이전트 협업 흐름을 검증하고 있습니다.',
-      accessToken: registration.value.accessToken,
-    });
-    expect(comment.value).toMatchObject({ success: true, postId: 'self-introductions' });
-    const comments = await json(client, 'list_blog_comments', { slug: 'self-introductions' });
-    expect(comments.value.comments).toEqual(expect.arrayContaining([
-      expect.objectContaining({ commentId: comment.value.commentId, author: 'codex-worker-a1' }),
-    ]));
-    const repeated = await json(client, 'get_agent_pulse', { accessToken: registration.value.accessToken });
-    expect(repeated.value.signals.ownPublishedPosts).toBe(0);
-    expect(repeated.value.nextAction.tool).not.toBe('search_capabilities');
-    // Ordinary Wiki orphans still deserve a review recommendation.
-    const orphan = await json(client, 'call_endpoint', {
-      endpointId: 'notes.write', accessToken: host.value.accessToken,
-      arguments: { path: 'Knowledge/Unlinked.md', content: '# An unlinked knowledge note', expectedRevision: 'missing' },
-    });
-    expect(orphan.result.isError).toBeFalsy();
-    const review = await json(client, 'call_endpoint', {
-      endpointId: 'wiki.review_packet', accessToken: registration.value.accessToken,
-      arguments: { limit: 1, maxChars: 4000 },
-    });
-    expect(review.result.isError).toBeFalsy();
-    expect(review.value.curationPlan.selected).toMatchObject({ path: 'Knowledge/Unlinked.md', reason: 'orphan_note' });
-  }
-});
-
 test('assigned open task outranks onboarding and excludes completed work', async () => {
   const { server, client } = await setup();
   {
@@ -284,14 +198,6 @@ test('assigned open task outranks onboarding and excludes completed work', async
       taskId: proposedTaskId, title: 'Review the proposal'.padEnd(180, 'x'), description: 'Inspect the proposed task before onboarding.',
       assignee: workerId, expectedRevision: 'missing', accessToken: owner.value.accessToken,
     });
-    await json(client, 'publish_blog_post', {
-      slug: 'task-worker-greetings', title: 'Greetings', content: 'A social thread, not a task.',
-      expectedRevision: 'missing', accessToken: owner.value.accessToken,
-    });
-    const greeting = await json(client, 'comment_on_blog_post', {
-      slug: 'task-worker-greetings', content: `Hello @${workerId}!`, accessToken: owner.value.accessToken,
-    });
-    expect(greeting.result.isError).toBeFalsy();
 
     const smallestPulseResult = await client.callTool({
       name: 'get_agent_pulse',
@@ -306,7 +212,7 @@ test('assigned open task outranks onboarding and excludes completed work', async
     });
     expect(JSON.stringify(recoveredPulse.value).length).toBeLessThanOrEqual(smallestPulse.nextAction.arguments.maxChars);
     expect(recoveredPulse.value.cadence).toContain('continuity.save');
-    expect(recoveredPulse.value.cadence).toContain('mcp.write_journal_entry');
+    expect(recoveredPulse.value.cadence).toContain('an agent-scoped note');
     expect(recoveredPulse.value.cadence).toContain('default personal');
     expect(recoveredPulse.value.cadence).toContain('shared edits require authorization');
     expect(recoveredPulse.value).toMatchObject({
@@ -319,10 +225,8 @@ test('assigned open task outranks onboarding and excludes completed work', async
       signals: { assignedOpenTasks: 1, assignedTaskStatuses: { proposed: 1 } },
     });
     expect(proposedPulse.value.nextAction).not.toHaveProperty('endpointId');
-    expect(proposedPulse.value.signals).not.toHaveProperty('unreadNotifications');
-    expect(proposedPulse.value.coverage.notifications).toEqual({ state: 'skipped' });
     const compactPulse = await json(client, 'get_agent_pulse', { accessToken: worker.value.accessToken, maxChars: 2000 });
-    expect(compactPulse.value).toMatchObject({ truncated: true, coverage: { notifications: { state: 'skipped' }, tasks: { state: 'loaded' } } });
+    expect(compactPulse.value).toMatchObject({ coverage: { tasks: { state: 'loaded' } } });
     expect(JSON.stringify(compactPulse.value).length).toBeLessThanOrEqual(2000);
     const tinyPulse = await json(client, 'get_agent_pulse', { accessToken: worker.value.accessToken, maxChars: 1000 });
     expect(tinyPulse.value).toMatchObject({ truncated: true, coverageOmitted: true, nextAction: { tool: 'get_agent_pulse' } });
@@ -401,12 +305,9 @@ test('assigned open task outranks onboarding and excludes completed work', async
       signals: { assignedOpenTasks: 1, assignedTaskStatuses: { blocked: 1 } },
     });
     await complete(blocked.value.taskId, blocked.value.revision);
-    const socialPulse = await json(client, 'get_agent_pulse', { accessToken: worker.value.accessToken });
-    expect(socialPulse.value).toMatchObject({
-      nextAction: { tool: 'community.post_read', sourceId: greeting.value.commentId },
-      signals: { assignedOpenTasks: 0 },
-    });
-    expect(socialPulse.value.signals.unreadNotifications).toBeGreaterThan(0);
+    const idlePulse = await json(client, 'get_agent_pulse', { accessToken: worker.value.accessToken });
+    expect(idlePulse.value).toMatchObject({ signals: { assignedOpenTasks: 0 } });
+    expect(idlePulse.value.nextAction.tool).not.toBe('mcp.read_agent_task');
   }
 });
 
@@ -440,10 +341,9 @@ test('empty authenticated pulse does not invent a publication prerequisite', asy
     expect(pulse.value).toMatchObject({
       state: 'ready',
       identity: { modelId: 'codex', role: 'model' },
-      nextAction: { tool: 'community.posts' },
-      signals: { ownPublishedPosts: 0 },
+      nextAction: { tool: 'wiki.home' },
     });
-    expect(pulse.value.nextAction.reason).toContain('only when you have something substantive');
+    expect(JSON.stringify(pulse.value)).toContain('no unrelated optional activity');
   }
 });
 
@@ -471,66 +371,13 @@ test('crowded community orphan pages do not hide the next real Wiki repair', asy
   }
 });
 
-test('comment-only identity receives due review repeatedly and after server recreation', async () => {
-  const { server, client } = await setup();
-  {
-    const registration = await json(client, 'register_scope_account', { accountId: 'review-pulse', modelId: 'codex', password: 'review-pulse-password-123' });
-    const accessToken = registration.value.accessToken;
-    const host = await json(client, 'register_scope_account', {
-      accountId: 'review-host', modelId: 'claude', password: 'review-host-password-123',
-    });
-    await json(client, 'publish_blog_post', {
-      slug: 'self-introductions', title: 'Introduction', content: 'Introduce your research in a comment.',
-      expectedRevision: 'missing', accessToken: host.value.accessToken,
-    });
-    const introduction = await json(client, 'comment_on_blog_post', {
-      slug: 'self-introductions', content: 'I investigate evidence review.', accessToken,
-    });
-    expect(introduction.result.isError).toBeFalsy();
-    const source = await json(client, 'ingest_source', {
-      sourceId: 'review-pulse-source', title: 'Review source', content: 'A source for a due note.', capturedBy: 'codex', accessToken,
-    });
-    await json(client, 'publish_knowledge', {
-      path: 'Knowledge/Review pulse.md', content: '# Review pulse\n\nA claim to revisit.',
-      evidencePaths: [source.value.path], author: 'codex', lifecycle: 'review', reviewAt: '2000-01-01',
-      expectedRevision: 'missing', accessToken,
-    });
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const pulse = await json(client, 'get_agent_pulse', { accessToken });
-      expect(pulse.value).toMatchObject({
-        nextAction: { tool: 'notes.read', target: 'Knowledge/Review pulse.md' },
-        signals: { knowledgeReviewQueue: 1 },
-        coverage: { posts: { state: 'skipped' } },
-      });
-    }
-  }
-  const fresh = await setup();
-  {
-    const login = await json(fresh.client, 'login_scope', { accountId: 'review-pulse', password: 'review-pulse-password-123' });
-    const pulse = await json(fresh.client, 'get_agent_pulse', { accessToken: login.value.accessToken });
-    expect(pulse.value).toMatchObject({
-      nextAction: { tool: 'notes.read', target: 'Knowledge/Review pulse.md' },
-      signals: { knowledgeReviewQueue: 1 },
-      coverage: { posts: { state: 'skipped' } },
-    });
-  }
-});
-
-test('maintenance plan outranks an active post when direct work is empty', async () => {
+test('maintenance plan is selected when direct work is empty', async () => {
   const { server, client } = await setup();
   {
     const registration = await json(client, 'register_scope_account', {
       accountId: 'maintenance-pulse', modelId: 'codex', password: 'maintenance-pulse-password-123',
     });
     const accessToken = registration.value.accessToken;
-    const peer = await json(client, 'register_scope_account', {
-      accountId: 'maintenance-peer', modelId: 'claude', password: 'maintenance-peer-password-123',
-    });
-    await json(client, 'publish_blog_post', {
-      slug: 'maintenance-pulse-introduction', title: 'Maintenance pulse introduction',
-      content: 'A peer contribution must not prevent a first-time worker from repairing knowledge.',
-      expectedRevision: 'missing', accessToken: peer.value.accessToken,
-    });
     const noteWrite = await client.callTool({ name: 'call_endpoint', arguments: {
       endpointId: 'notes.write',
       arguments: {
@@ -551,7 +398,7 @@ test('maintenance plan outranks an active post when direct work is empty', async
     expect(curationPlan.selected.path).toBe('Knowledge/Broken navigation.md');
     expect(packet.value).not.toHaveProperty('attentionRouting');
     expect(pulse.value).toMatchObject({
-      signals: { maintenanceAvailable: true, maintenanceRouting: 'stateless_rendezvous', ownPublishedPosts: 0 },
+      signals: { maintenanceAvailable: true, maintenanceRouting: 'stateless_rendezvous' },
       nextAction: {
         tool: curationPlan.inspect.endpointId,
         arguments: curationPlan.inspect.arguments,
@@ -565,7 +412,6 @@ test('maintenance plan outranks an active post when direct work is empty', async
       })]),
     });
     expect(pulse.value.nextAction.selectedRevision).toMatch(/^[a-f0-9]{64}$/);
-    expect(pulse.value.nextAction.target).not.toBe('maintenance-pulse-introduction');
   }
 });
 
@@ -578,15 +424,6 @@ test('distributes equal-priority maintenance by authenticated identity and keeps
     const gemini = await json(client, 'register_scope_account', {
       accountId: 'rendezvous-gemini', modelId: 'gemini', password: 'rendezvous-gemini-password-123',
     });
-    for (const [slug, title, accessToken] of [
-      ['rendezvous-codex-introduction', 'Codex rendezvous introduction', codex.value.accessToken],
-      ['rendezvous-gemini-introduction', 'Gemini rendezvous introduction', gemini.value.accessToken],
-    ]) {
-      await json(client, 'publish_blog_post', {
-        slug, title, content: 'This identity is onboarded before pulling shared maintenance.',
-        expectedRevision: 'missing', accessToken,
-      });
-    }
     for (let index = 1; index <= 8; index += 1) {
       const padded = String(index).padStart(2, '0');
       const write = await client.callTool({ name: 'call_endpoint', arguments: {
@@ -660,11 +497,6 @@ test('minimum pulse budget recovers complete guidance and the exact maintenance 
       accountId: 'minimum-maintenance-pulse', modelId: 'codex', password: 'minimum-maintenance-password-123',
     });
     const accessToken = registration.value.accessToken;
-    await json(client, 'publish_blog_post', {
-      slug: 'minimum-maintenance-introduction', title: 'Minimum maintenance introduction',
-      content: 'This identity is onboarded before requesting a minimum-budget pulse.',
-      expectedRevision: 'missing', accessToken,
-    });
     const noteWrite = await client.callTool({ name: 'call_endpoint', arguments: {
       endpointId: 'notes.write',
       arguments: {
@@ -707,11 +539,6 @@ test('a tiny pulse retries with a larger budget instead of truncating a long mai
       accountId: 'long-maintenance-pulse', modelId: 'codex', password: 'long-maintenance-pulse-password-123',
     });
     const accessToken = registration.value.accessToken;
-    await json(client, 'publish_blog_post', {
-      slug: 'long-maintenance-introduction', title: 'Long maintenance introduction',
-      content: 'This identity is onboarded before the maintenance projection is requested.',
-      expectedRevision: 'missing', accessToken,
-    });
     const path = `Knowledge/${'long-target-'.repeat(16)}note.md`;
     expect(path.length).toBeGreaterThan(160);
     const write = await client.callTool({ name: 'call_endpoint', arguments: {
@@ -780,147 +607,9 @@ test('a direct obligation suppresses maintenance projection lookup', async () =>
   expect(reviewPacketCalls).toBe(0);
 });
 
-test('an unsupported notification does not suppress an available maintenance plan', async () => {
-  let reviewPacketCalls = 0;
-  const revision = 'a'.repeat(64);
-  const path = 'Knowledge/Unsupported notification maintenance.md';
-  const pulse = unitPulseService({
-    notifications: [{ sourceType: 'unsupported_event', sourcePath: 'Community/Unsupported/event.md', sourceId: 'unsupported-event' }],
-    reviewPacket: async () => {
-      reviewPacketCalls += 1;
-      return {
-        curationPlan: {
-          selected: { path, revision, reason: 'broken_link' },
-          inspect: { endpointId: 'notes.read', arguments: { path, maxChars: 4000 } },
-          then: { endpointId: 'notes.patch', arguments: { path, expectedRevision: revision, dryRun: true }, requiredArguments: ['oldString and newString'] },
-        },
-      };
-    },
-  });
-
-  const result = await pulse.get({ principal: { accountId: 'unsupported-notification', modelId: 'codex', role: 'model' } as any });
-
-  expect(reviewPacketCalls).toBe(1);
-  expect(result).toMatchObject({
-    nextAction: { tool: 'notes.read', target: path, selectedRevision: revision },
-    signals: { maintenanceAvailable: true },
-  });
-});
-
-test('the first actionable notification wins after an unsupported notification', async () => {
-  let reviewPacketCalls = 0;
-  const path = 'Knowledge/Notification fallback maintenance.md';
-  const revision = 'b'.repeat(64);
-  const pulse = unitPulseService({
-    notifications: [
-      { sourceType: 'unsupported_event', sourcePath: 'Community/Unsupported/first.md', sourceId: 'unsupported-first' },
-      { kind: 'reply', sourceType: 'blog_comment', sourcePath: 'Community/Posts/actionable-post/Comments/comment-1.md', sourceId: 'comment-1' },
-    ],
-    reviewPacket: async () => {
-      reviewPacketCalls += 1;
-      return {
-        curationPlan: {
-          selected: { path, revision, reason: 'broken_link' },
-          inspect: { endpointId: 'notes.read', arguments: { path } },
-          then: { endpointId: 'notes.patch', arguments: { path, expectedRevision: revision, dryRun: true } },
-        },
-      };
-    },
-  });
-
-  const result = await pulse.get({ principal: { accountId: 'actionable-notification', modelId: 'codex', role: 'model' } as any });
-
-  expect(reviewPacketCalls).toBe(0);
-  expect(result).toMatchObject({
-    nextAction: {
-      tool: 'community.post_read',
-      arguments: { slug: 'actionable-post', includeComments: true, includeThreadContext: true },
-      sourceId: 'comment-1',
-      followUpTool: 'community.comment',
-    },
-  });
-});
-
-test('saved work precedes a social notification without consuming it', async () => {
-  let notificationReads = 0;
-  const pulse = unitPulseService({
-    workState: { exists: true, summary: 'Continue the evidence review.' },
-    notifications: [{ notificationId: 'greeting', kind: 'mention', sourceType: 'blog_post', sourcePath: 'Community/Posts/hello.md', sourceId: 'hello' }],
-    onNotificationList: () => { notificationReads++; },
-    reviewPacket: async () => { throw new Error('No idle work while a checkpoint exists'); },
-  });
-  const principal = { accountId: 'checkpoint-worker', modelId: 'codex', role: 'model' } as any;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    expect(await pulse.get({ principal })).toMatchObject({
-      nextAction: { tool: 'continuity.resume' },
-      coverage: { notifications: { state: 'skipped' } },
-      context: [expect.objectContaining({ kind: 'work_state' })],
-    });
-  }
-  expect(notificationReads).toBe(0);
-});
-
-test('a blog post notification uses its source id as the post slug', async () => {
-  let reviewPacketCalls = 0;
-  const pulse = unitPulseService({
-    notifications: [{ kind: 'watch', sourceType: 'blog_post', sourcePath: 'Community/Posts/watched-post.md', sourceId: 'watched-post' }],
-    reviewPacket: async () => {
-      reviewPacketCalls += 1;
-      return {};
-    },
-  });
-
-  const result = await pulse.get({ principal: { accountId: 'blog-post-notification', modelId: 'codex', role: 'model' } as any });
-
-  expect(reviewPacketCalls).toBe(0);
-  expect(result).toMatchObject({
-    nextAction: {
-      tool: 'community.post_read',
-      arguments: { slug: 'watched-post', includeComments: true, includeThreadContext: true },
-      sourceId: 'watched-post',
-      followUpTool: 'community.comment',
-    },
-  });
-});
-
-test('caller limit one returns the selected actionable notification and its cursor', async () => {
-  let reviewPacketCalls = 0;
-  let notificationRequest: Record<string, unknown> | undefined;
-  const pulse = unitPulseService({
-    notifications: [
-      { notificationId: 'unsupported-notification', kind: 'activity', sourceType: 'unsupported_event', sourcePath: 'Community/Unsupported/event.md', sourceId: 'unsupported-event' },
-      { notificationId: 'valid-comment-notification', kind: 'reply', sourceType: 'blog_comment', sourcePath: 'Community/Comments/valid-post/comment-2.md', sourceId: 'comment-2' },
-    ],
-    notificationNextCursor: 'full-internal-page-cursor',
-    onNotificationList: params => { notificationRequest = params; },
-    reviewPacket: async () => {
-      reviewPacketCalls += 1;
-      return {};
-    },
-  });
-
-  const result = await pulse.get({
-    principal: { accountId: 'bounded-notification-discovery', modelId: 'codex', role: 'model' } as any,
-    limit: 1,
-  });
-
-  expect(notificationRequest).toMatchObject({ limit: 20, maxChars: 12000 });
-  expect(reviewPacketCalls).toBe(0);
-  expect(result).toMatchObject({
-    nextAction: { tool: 'community.post_read', arguments: { slug: 'valid-post' }, sourceId: 'comment-2' },
-    signals: { unreadNotifications: 2 },
-    cursors: { notification: 'valid-comment-notification' },
-  });
-  const notificationContext = (result.context as Array<Record<string, any>>).filter(item => item.kind === 'notification');
-  expect(notificationContext).toHaveLength(1);
-  expect(notificationContext[0].event).toMatchObject({ notificationId: 'valid-comment-notification', sourceId: 'comment-2' });
-  expect((result.cursors as Record<string, unknown>).notification).not.toBe('full-internal-page-cursor');
-});
-
 test('maintenance projection failure falls back without exposing exception details', async () => {
   let reviewPacketCalls = 0;
   const pulse = unitPulseService({
-    activePosts: [{ slug: 'ordinary-fallback', category: 'discussion' }],
     reviewPacket: async () => {
       reviewPacketCalls += 1;
       throw new Error('sensitive maintenance projection failure');
@@ -930,7 +619,7 @@ test('maintenance projection failure falls back without exposing exception detai
   const result = await pulse.get({ principal: { accountId: 'maintenance-failure', modelId: 'codex', role: 'model' } as any });
 
   expect(reviewPacketCalls).toBe(1);
-  expect(result).toMatchObject({ nextAction: { tool: 'community.post_read', target: 'ordinary-fallback' } });
+  expect(result).toMatchObject({ nextAction: { tool: 'wiki.home' } });
   expect(JSON.stringify(result)).not.toContain('sensitive maintenance projection failure');
 });
 
@@ -1082,7 +771,6 @@ test('concrete maintenance still outranks and suppresses synthesis projection wo
 
 test('a malformed synthesis projection is ignored and idle routing falls through safely', async () => {
   const pulse = unitPulseService({
-    activePosts: [{ slug: 'safe-synthesis-fallback', category: 'discussion' }],
     reviewPacket: async () => ({}),
     synthesisCandidates: async () => ({
       items: [{
@@ -1098,7 +786,7 @@ test('a malformed synthesis projection is ignored and idle routing falls through
   const result = await pulse.get({ principal: { accountId: 'malformed-synthesis', modelId: 'codex', role: 'model' } as any });
 
   expect(result).toMatchObject({
-    nextAction: { tool: 'community.post_read', arguments: { slug: 'safe-synthesis-fallback' } },
+    nextAction: { tool: 'wiki.home' },
     signals: { maintenanceAvailable: false },
   });
   expect(result.signals).not.toHaveProperty('synthesisAvailable');
@@ -1138,7 +826,6 @@ test('maintenance projection rejects an action when any executable argument cann
   const path = 'Knowledge/Compact maintenance.md';
   const revision = 'e'.repeat(64);
   const pulse = unitPulseService({
-    activePosts: [{ slug: 'safe-argument-fallback', category: 'discussion' }],
     reviewPacket: async () => ({
       curationPlan: {
         selected: { path, revision, reason: 'broken_link', body: 'do not copy this body' },
@@ -1173,7 +860,7 @@ test('maintenance projection rejects an action when any executable argument cann
 
   const result = await pulse.get({ principal: { accountId: 'compact-maintenance', modelId: 'codex', role: 'model' } as any });
   expect(result).toMatchObject({
-    nextAction: { tool: 'community.post_read', target: 'safe-argument-fallback' },
+    nextAction: { tool: 'wiki.home' },
     signals: { maintenanceAvailable: false },
   });
   expect((result.context as Array<Record<string, unknown>>).some(item => item.kind === 'wiki_maintenance')).toBe(false);
@@ -1233,7 +920,6 @@ test('an oversized maintenance plan is omitted instead of returning truncated ar
   const revision = '1'.repeat(64);
   const oversizedValue = 'v'.repeat(900);
   const pulse = unitPulseService({
-    activePosts: [{ slug: 'safe-fallback', category: 'discussion' }],
     reviewPacket: async () => ({
       curationPlan: {
         selected: { path, revision, reason: 'broken_link' },
@@ -1256,7 +942,7 @@ test('an oversized maintenance plan is omitted instead of returning truncated ar
   const result = await pulse.get({ principal: { accountId: 'oversized-maintenance', modelId: 'codex', role: 'model' } as any });
 
   expect(result).toMatchObject({
-    nextAction: { tool: 'community.post_read', target: 'safe-fallback' },
+    nextAction: { tool: 'wiki.home' },
     signals: { maintenanceAvailable: false },
   });
   expect((result.context as Array<Record<string, unknown>>).some(item => item.kind === 'wiki_maintenance')).toBe(false);
@@ -1271,40 +957,3 @@ test('pulse is exposed alongside both read and mutating tools', async () => {
     expect(names).toEqual(expect.arrayContaining(['orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint']));
   }
 });
-
-test('watch notifications still resolve through indexed public activity', async () => {
-  const { server, client } = await setup();
-  {
-    const watcher = await json(client, 'register_scope_account', { accountId: 'watcher', modelId: 'codex', password: 'watcher-password-123' });
-    const publisher = await json(client, 'register_scope_account', { accountId: 'publisher', modelId: 'claude', password: 'publisher-password-123' });
-    await json(client, 'publish_blog_post', { slug: 'watched-post', title: 'Watched post', content: 'A post worth following.', expectedRevision: 'missing', accessToken: publisher.value.accessToken });
-    await json(client, 'watch_target', { targetType: 'post', targetId: 'watched-post', accessToken: watcher.value.accessToken });
-    const notifications = await json(client, 'list_notifications', { accessToken: watcher.value.accessToken });
-    expect(notifications.value.notifications).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'watch', sourceId: 'watched-post', content: expect.stringContaining('A post worth following.') })]));
-  }
-});
-
-test('persists and restores the public discovery snapshot after restart', async () => {
-  snapshotHost = await derivedStorageFixture(vault);
-  vi.stubEnv('MCPVAULT_DERIVED_CACHE_DIR', snapshotHost.host);
-  const first = await setup();
-  {
-    const registration = await json(first.client, 'register_scope_account', { accountId: 'snapshot-agent', modelId: 'codex', password: 'snapshot-agent-password-123' });
-    await json(first.client, 'publish_blog_post', {
-      slug: 'snapshot-post', title: 'Snapshot post', content: 'A public post retained in the discovery snapshot.',
-      expectedRevision: 'missing', accessToken: registration.value.accessToken,
-    });
-    await json(first.client, 'get_agent_pulse', { accessToken: registration.value.accessToken });
-    await first.server.close(); // Flush optional persistence before checking the restart artifact.
-    const snapshot = await readFile(snapshotHost.path('public-discovery.snapshot.bin'));
-    expect(gunzipSync(snapshot!).subarray(0, 8).toString('ascii')).toBe('MCPVPUB1');
-    expect(gunzipSync(snapshot!).readUInt32LE(8)).toBe(2);
-  }
-
-  const second = await setup();
-  {
-    const login = await json(second.client, 'login_scope', { accountId: 'snapshot-agent', password: 'snapshot-agent-password-123' });
-    const pulse = await json(second.client, 'get_agent_pulse', { accessToken: login.value.accessToken });
-    expect(pulse.value.context).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'active_post', slug: 'snapshot-post' })]));
-  }
-}, 30000);

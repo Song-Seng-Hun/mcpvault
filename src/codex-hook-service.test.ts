@@ -11,7 +11,7 @@ beforeEach(() => {
   now = 1000; history = undefined; writes = 0; effects = 0; locked = false;
   config = { version: 1, enabled: true, accountId: 'operator', projects: [{ id: 'p', workspace: 'E:/dev/wiki', definitionHash: hash,
     paths: ['Note.md'], events: ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'PostCompact', 'PreCompact', 'Stop', 'Interrupt', 'SessionEnd'],
-    actions: ['resume', 'search', 'candidate', 'checkpoint', 'compilation', 'community'] }] };
+    actions: ['resume', 'search', 'candidate', 'checkpoint', 'compilation'] }] };
   ticket = { projectId: 'p', accountId: 'operator', workspace: 'E:/dev/wiki', definitionHash: hash, sessionId: 's', event: 'Stop',
     causeId: 'cause-1', authorityRevision: hash, inputRevision: hash, mode: 'default', verified: true, expiresAt: 1000000,
     hostBusy: false, quotaAvailable: true, paths: ['Note.md'], work: { action: 'compilation', requestId: 'job', expectedJobRevision: hash } };
@@ -46,15 +46,6 @@ test('event and session must match the actual host-attested occurrence', async (
 test('Stop reentry and origin markers never create another opportunity', async () => {
   expect(await service().run(payload('Stop', { stop_hook_active: true }))).toEqual({ status: 'quiet' });
   ticket.originId = 'mcpvault-hook'; expect(await service().run(payload())).toEqual({ status: 'quiet' }); expect(effects).toBe(0);
-});
-test('same cause cannot switch from knowledge to community, including heartbeat delivery', async () => {
-  await service().run(payload()); ticket.work = { action: 'community' };
-  expect(await service().run(payload())).toEqual({ status: 'review_required' }); expect(effects).toBe(1);
-});
-test('the same community cause from session-start and Stop coalesces without a second action', async () => {
-  ticket.event = 'SessionStart'; ticket.work = { action: 'community' };
-  await service().run(payload('SessionStart')); ticket.event = 'Stop';
-  expect(await service().run(payload('Stop'))).toEqual({ status: 'quiet' }); expect(effects).toBe(1);
 });
 test('cancellation returns promptly but holds the worker until the adapter settles', async () => {
   let release!: () => void; const held = new Promise<void>(resolve => { release = resolve; });

@@ -26,7 +26,7 @@ export function isLegacyDiscussionPath(path: string, includeAncestors = false): 
 
 export function assertLegacyDiscussionMutationAllowed(path: string, operation: string, includeAncestors = false): void {
   if (isLegacyDiscussionPath(path, includeAncestors)) {
-    throw guidanceError(new Error(`${operation} cannot mutate _collaboration/discussions: historical read-only content. Use community.post, community.comment, or community.status for current discussions; use notes.read for bounded historical reads.`), 'guid-d9781b35425d9430');
+    throw guidanceError(new Error(`${operation} cannot mutate _collaboration/discussions: historical read-only content. Use notes.read for bounded historical reads.`), 'guid-d9781b35425d9430');
   }
 }
 
@@ -177,7 +177,7 @@ export class ScopeAccessPolicy {
     }
     if (this.isPrivateServicePath(normalized)) {
       if (normalized.toLowerCase() === WHISPER_ROOT || normalized.toLowerCase().startsWith(`${WHISPER_ROOT}/`)) {
-        throw guidanceError(new Error('Direct _whispers paths are private; use list_whispers'), 'guid-f6111d98d54c81a6');
+        throw guidanceError(new Error('Direct _whispers paths are private'), 'guid-f6111d98d54c81a6');
       }
       throw guidanceError(new Error('Direct _scopes paths are private; use an authorized scope:// URI'), 'guid-96ad59057b9089ce');
     }

@@ -346,7 +346,7 @@ test('memory survives a server restart without a second memory store', async () 
   const directBrief = await client.callTool({ name: 'memory_brief', arguments: { scope: 'global', query: 'NAS' } });
   const comparison = await call('memory.consolidate', { scope: 'global', query: 'NAS', semantic: false });
   expect(brief.result.isError).not.toBe(true); expect(directBrief.isError).not.toBe(true); expect(comparison.result.isError).not.toBe(true);
-  expect((await client.listTools()).tools).toHaveLength(16);
+  expect((await client.listTools()).tools).toHaveLength(12);
 });
 
 test('a semantic eligibility change invalidates continuation even with unchanged source order', async () => {

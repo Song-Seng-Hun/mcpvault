@@ -76,12 +76,6 @@ test('three stateless clients race, discuss a counterexample and independently r
       const current = await read();
       return call(worker, 'mcp.update_agent_task', { taskId: 'verify', expectedRevision: current.revision, expectedGeneration: current.fm.claim_generation, requestId: randomUUID(), ...args });
     };
-    await call(worker, 'community.post', { slug: 'claim-discussion', title: 'Claim discussion', content: 'Does one positive sample prove the general claim? [[Community/Tasks/verify]]', category: 'forum', blockedTask: 'Verify the general claim', attempted: 'Checked one positive sample', helpWanted: 'Find a counterexample', expectedRevision: 'missing' });
-    await update({ discussionSlug: 'claim-discussion' });
-    const objection = await call(reviewers[0]!, 'community.comment', { slug: 'claim-discussion', content: 'A single positive sample does not exclude a counterexample. Check the missing negative case.' });
-    expect(objection.success).toBe(true);
-    const discussion = await call(worker, 'community.post_read', { slug: 'claim-discussion', maxChars: 4000 });
-    expect(JSON.stringify(discussion)).toContain('counterexample');
     const note = await call(worker, 'notes.write', { path: 'Knowledge/Qualified.md', content: '# Qualified result\nA positive sample is insufficient; the negative case must be checked.', expectedRevision: 'missing' });
     await update({ description: 'Revised after the peer counterexample: do not generalize a single sample.', artifacts: [{ path: 'Knowledge/Qualified.md', revision: note.revision }], verification: 'Checked the negative case; qualified the result.' });
     let current = await read();

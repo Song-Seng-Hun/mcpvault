@@ -5,7 +5,7 @@ import { OwnerActivityRuntime } from './owner-activity-runtime.js';
 const future = '2999-01-01T00:00:00.000Z';
 function policy(overrides: Partial<OwnerActivityConfig> = {}) {
   return new OwnerActivityPolicy({ version: 1, owners: { account1: 'owner1' }, grants: [{
-    id: 'grant1', ownerId: 'owner1', accountIds: ['account1'], activities: ['collaboration'],
+    id: 'grant1', ownerId: 'owner1', accountIds: ['account1'], activities: ['skill-evolution'],
     actions: ['discover', 'read', 'claim', 'execute'], dataPrefixes: ['Community/Allowed'],
     executionTargets: ['runtime1'], expiresAt: future,
   }], ...overrides });
@@ -13,13 +13,13 @@ function policy(overrides: Partial<OwnerActivityConfig> = {}) {
 
 describe('trusted owner activity runtime', () => {
   test('defaults to no consent when trusted host authority is absent', async () => {
-    await expect(new OwnerActivityRuntime().begin('collaboration', 'discover'))
+    await expect(new OwnerActivityRuntime().begin('skill-evolution', 'discover'))
       .rejects.toThrow(/consent|authority/i);
   });
 
   test('binds one grant and filters every candidate path through it', async () => {
     const runtime = new OwnerActivityRuntime({ policy, execution: () => ({ accountId: 'account1', executionTarget: 'runtime1' }) });
-    const operation = await runtime.begin('collaboration', 'discover');
+    const operation = await runtime.begin('skill-evolution', 'discover');
     expect(operation.grantId).toBe('grant1');
     expect(operation.canAccessPath('Community/Allowed/post.md')).toBe(true);
     expect(operation.canAccessPath('Community/Secret/post.md')).toBe(false);
@@ -29,18 +29,18 @@ describe('trusted owner activity runtime', () => {
 
   test('never combines grants while checking operation paths', async () => {
     const split = policy({ grants: [
-      { id: 'grant1', ownerId: 'owner1', accountIds: ['account1'], activities: ['collaboration'], actions: ['read'], dataPrefixes: ['A'], executionTargets: ['runtime1'], expiresAt: future },
-      { id: 'grant2', ownerId: 'owner1', accountIds: ['account1'], activities: ['collaboration'], actions: ['read'], dataPrefixes: ['B'], executionTargets: ['runtime1'], expiresAt: future },
+      { id: 'grant1', ownerId: 'owner1', accountIds: ['account1'], activities: ['skill-evolution'], actions: ['read'], dataPrefixes: ['A'], executionTargets: ['runtime1'], expiresAt: future },
+      { id: 'grant2', ownerId: 'owner1', accountIds: ['account1'], activities: ['skill-evolution'], actions: ['read'], dataPrefixes: ['B'], executionTargets: ['runtime1'], expiresAt: future },
     ] });
     const runtime = new OwnerActivityRuntime({ policy: () => split, execution: () => ({ accountId: 'account1', executionTarget: 'runtime1' }) });
-    await expect(runtime.begin('collaboration', 'read', ['A/a.md', 'B/b.md'])).rejects.toThrow(/consent|scope/i);
+    await expect(runtime.begin('skill-evolution', 'read', ['A/a.md', 'B/b.md'])).rejects.toThrow(/consent|scope/i);
   });
 
   test('rechecks refresh, policy fingerprint, expiry and execution identity', async () => {
     let current = policy(); let target = 'runtime1'; let refreshes = 0;
     const runtime = new OwnerActivityRuntime({ refresh: async () => { refreshes += 1; }, policy: () => current,
       execution: () => ({ accountId: 'account1', executionTarget: target }) });
-    const operation = await runtime.begin('collaboration', 'read', ['Community/Allowed/post.md']);
+    const operation = await runtime.begin('skill-evolution', 'read', ['Community/Allowed/post.md']);
     await operation.beforeWrite('Community/Allowed/post.md');
     expect(refreshes).toBe(2);
     target = 'runtime2';

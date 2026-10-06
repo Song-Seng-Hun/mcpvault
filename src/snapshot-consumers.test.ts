@@ -1,14 +1,10 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { mkdtemp, mkdir, writeFile, readFile, rm, stat } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
-import { FileSystemService } from './filesystem.js';
 import { PathFilter } from './pathfilter.js';
-import { VaultFileCatalog } from './vault-catalog.js';
-import { NotificationService } from './notifications.js';
-import type { ReputationService } from './reputation.js';
 import { SemanticSearchService } from './semantic-search.js';
 import { SearchService } from './search.js';
 import { derivedStorageFixture } from '../tests/derived-storage-fixture.js';
@@ -41,30 +37,6 @@ afterEach(async () => {
   await rm(vault, { recursive: true, force: true });
 });
 
-test('public discovery restores valid cache and rebuilds current Markdown when decoding is rejected', async () => {
-  await mkdir(join(vault, 'Community/Posts'), { recursive: true });
-  const post = '---\nmcpvault_type: blog_post\nstatus: published\npost_id: actual\ntitle: Current post\n---\nBody';
-  await writeFile(join(vault, 'Community/Posts/actual.md'), post);
-  const fs = new FileSystemService(vault);
-  const catalog = new VaultFileCatalog(vault, new PathFilter());
-  // Reputation is not used by discovery; fail immediately if this changes.
-  const reputation = new Proxy({} as ReputationService, { get() { throw new Error('Unexpected reputation operation'); } });
-  const first = new NotificationService(fs, reputation, vault, catalog);
-  const restored = new NotificationService(fs, reputation, vault, catalog);
-  const rejected = new NotificationService(fs, reputation, vault, catalog);
-  try {
-    expect((await first.discoverySnapshot()).posts[0]?.path).toBe('Community/Posts/actual.md');
-    await first.close();
-    expect((await readFile(host.path('public-discovery.snapshot.bin'))).length).toBeGreaterThan(0);
-    expect((await (restored as any).loadPublicSnapshot()).posts[0]?.path).toBe('Community/Posts/actual.md');
-    ceiling.decoded = 8;
-    const before = ceiling.rejections;
-    expect((await rejected.discoverySnapshot()).posts[0]?.path).toBe('Community/Posts/actual.md');
-    expect(ceiling.rejections).toBeGreaterThan(before);
-    expect(await readFile(join(vault, 'Community/Posts/actual.md'), 'utf8')).toBe(post);
-  } finally { await first.close(); await restored.close(); await rejected.close(); catalog.close(); }
-}, 30000); // Real Windows ACL checks cover write, restore, rejection and rebuild.
-
 test('semantic oversized gzip falls back to bounded valid legacy manifest without losing source files', async () => {
   const raw = '# Current';
   await writeFile(join(vault, 'Note.md'), raw);
@@ -91,27 +63,4 @@ test('lexical search rebuilds Markdown after legacy gzip exceeds its ceiling', a
     expect((await service.search({ query: 'SnapshotColdNeedle', maxChars: 512 }))[0]?.p).toBe('Note.md');
     expect(ceiling.rejections).toBeGreaterThanOrEqual(1); // Existing legacy gzip reached the bounded reader and was rejected.
   } finally { await service.close(); }
-});
-
-test.each(['Community/Posts/actual.md', '_scopes/agents/other/Private.md', 'Community/Posts/../Comments/forged.md'])('legacy discovery validates note membership for %s', async path => {
-  const actualPath = 'Community/Posts/actual.md';
-  await mkdir(join(vault, 'Community/Posts'), { recursive: true });
-  await writeFile(join(vault, actualPath), '---\nmcpvault_type: blog_post\nstatus: published\n---\nActual');
-  const info = await stat(join(vault, actualPath));
-  const string = (value: string) => {
-    const bytes = Buffer.from(value); const length = Buffer.alloc(4);
-    length.writeUInt32LE(bytes.length); return Buffer.concat([length, bytes]);
-  };
-  const header = Buffer.alloc(12); header.writeUInt32LE(1); header.writeUInt32LE(1, 4); header.writeUInt32LE(1, 8);
-  const metadata = Buffer.alloc(16); metadata.writeDoubleLE(info.size); metadata.writeDoubleLE(info.mtimeMs, 8);
-  const disk = Buffer.concat([Buffer.from('MCPVPUB1'), header, string(actualPath), metadata,
-    Buffer.from([0]), string(path), string(JSON.stringify({ mcpvault_type: 'blog_post', status: 'published' }))]);
-  await writeFile(host.path('public-discovery.snapshot.bin'), gzipSync(disk));
-  const catalog = new VaultFileCatalog(vault, new PathFilter());
-  const service = new NotificationService(new FileSystemService(vault), {} as ReputationService, vault, catalog);
-  try {
-    const result = await (service as any).loadPublicSnapshot();
-    if (path === actualPath) expect(result?.posts[0]?.path).toBe(actualPath);
-    else expect(result).toBeUndefined();
-  } finally { await service.close(); catalog.close(); }
 });

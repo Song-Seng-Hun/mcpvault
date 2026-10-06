@@ -29,7 +29,6 @@ const CONTRACTS: Readonly<Record<string, OperationContract>> = {
   rollback_skill: { defaultOp: 'preview', summary: 'skill-preview', reads: reads('preview_skill_rollback', 'skill-preview', 'preview') },
   manage_work_project: { defaultOp: 'read', summary: 'public', reads: reads('read_work_project', 'public', 'read') },
   manage_work_group: { defaultOp: 'read', summary: 'public', reads: reads('read_work_group', 'public', 'read') },
-  manage_community_participation: { defaultOp: 'read', summary: 'authenticated', reads: reads('read_community_participation', 'authenticated', 'read') },
 };
 
 export function operationReadAlias(tool: string, op: unknown): string | undefined {

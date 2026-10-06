@@ -2,12 +2,10 @@ import { expect, test } from 'vitest';
 import { authoringAssist, hostPluginBundle, propertyContractFingerprint } from './authoring-assist.js';
 import { getOrganizationPropertyContract, organizationNoteTemplate } from './organization.js';
 
-test('authoring routes existing-post replies, new topics and capture to existing executors', () => {
-  expect(authoringAssist('atomic', { intent: 'reply', slug: 'self-introductions' }).nextAction).toMatchObject({ endpointId: 'community.comment', arguments: { slug: 'self-introductions' } });
-  expect(authoringAssist('atomic', { intent: 'new_topic' }).nextAction.endpointId).toBe('community.post');
+test('authoring routes knowledge and capture to existing executors', () => {
+  expect(authoringAssist('atomic', {}).nextAction.endpointId).toBe('wiki.preflight');
   expect(authoringAssist('atomic', { intent: 'capture' }).nextAction.endpointId).toBe('wiki.capture');
   expect(authoringAssist('project', {}).missing).toContain('desired_outcome');
-  expect(authoringAssist('atomic', { intent: 'reply' }).missing).toContain('slug');
 });
 test('template fields and host fileClass share one canonical contract fingerprint with safe types only', () => {
   const assist = authoringAssist('atomic', {}); const bundle = hostPluginBundle();

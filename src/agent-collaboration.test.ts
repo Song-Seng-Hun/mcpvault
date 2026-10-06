@@ -19,7 +19,7 @@ async function json(client: Client, name: string, arguments_: Record<string, unk
   return { result, value: JSON.parse((result.content as any)[0].text) };
 }
 
-test('profiles, durable notifications, tasks, and capability revocation compose on one server', async () => {
+test('profiles, tasks, and capability revocation compose on one server', async () => {
   const { server, client } = await setup();
   try {
     await client.callTool({ name: 'register_scope_account', arguments: { accountId: 'owner-login', modelId: 'codex', password: 'owner-model-password' } });
@@ -33,20 +33,7 @@ test('profiles, durable notifications, tasks, and capability revocation compose 
     expect(publicProfiles.value.profiles[0]).not.toHaveProperty('accountId');
     expect(publicProfiles.value.profiles[0]).toMatchObject({ identity: 'researcher', capabilities: expect.arrayContaining(['journal']) });
 
-    const post = await json(client, 'publish_blog_post', { slug: 'coordination', title: 'Coordination', content: 'Public work queue.', expectedRevision: 'missing', accessToken: ownerToken });
-    await json(client, 'list_notifications', { accessToken: ownerToken, includeRead: true, limit: 10 });
-    const comment = await json(client, 'comment_on_blog_post', { slug: 'coordination', content: '@codex I found supporting evidence.', accessToken: agentToken });
-    expect(comment.value.success).toBe(true);
-    const notifications = await json(client, 'list_notifications', { accessToken: ownerToken, limit: 10 });
-    expect(notifications.value.notifications).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'mention', sourceId: comment.value.commentId, unread: true })]));
-    const marker = await json(client, 'mark_notifications_read', { through: `mention:${comment.value.commentId}`, accessToken: ownerToken });
-    expect(marker.value.success).toBe(true);
-    const unread = await json(client, 'list_notifications', { accessToken: ownerToken });
-    expect(unread.value.notifications).toHaveLength(0);
-    const history = await json(client, 'list_notifications', { includeRead: true, accessToken: ownerToken });
-    expect(history.value.notifications[0].unread).toBe(false);
-
-    const task = await json(client, 'create_agent_task', { taskId: 'evidence-review', title: 'Review evidence', description: 'Compare the cited claims.', assignee: 'researcher', references: [post.value.path], expectedRevision: 'missing', accessToken: ownerToken });
+    const task = await json(client, 'create_agent_task', { taskId: 'evidence-review', title: 'Review evidence', description: 'Compare the cited claims.', assignee: 'researcher', expectedRevision: 'missing', accessToken: ownerToken });
     const taskRead = await json(client, 'read_agent_task', { taskId: task.value.taskId });
     expect(taskRead.value.fm).toMatchObject({ status: 'proposed', assignee: 'researcher' });
     const taskUpdate = await json(client, 'update_agent_task', { taskId: task.value.taskId, status: 'in_progress', reason: 'Researcher accepted the review.', expectedRevision: taskRead.value.revision, accessToken: agentToken });
@@ -92,9 +79,6 @@ test('profiles, durable notifications, tasks, and capability revocation compose 
     const revoked = await client.callTool({ name: 'whoami_scope', arguments: { accessToken: agentToken } });
     expect(revoked.isError).toBe(true);
     agentToken = (await json(client, 'login_scope', { accountId: 'agent-login', password: 'agent-researcher-password' })).value.accessToken as string;
-    const blockedChat = await client.callTool({ name: 'send_chat_message', arguments: { roomId: 'missing', content: 'blocked', accessToken: agentToken } });
-    expect(blockedChat.isError).toBe(true);
-    expect((blockedChat.content as any)[0].text).toContain("Capability 'chat'");
     const blockedWrite = await client.callTool({ name: 'write_note', arguments: { path: 'scope://agent/researcher/private.md', content: 'blocked', accessToken: agentToken } });
     expect(blockedWrite.isError).toBe(true);
     expect((blockedWrite.content as any)[0].text).toContain("Capability 'write'");
@@ -104,7 +88,6 @@ test('profiles, durable notifications, tasks, and capability revocation compose 
     // Only exact, currently accessible document locators can be exposed.
     // Capability and slug-only records lack that proof and stay filtered.
     expect(audit.value.events.some((event: any) => event.tool === 'update_agent_capabilities')).toBe(false);
-    expect(audit.value.events.some((event: any) => event.tool === 'publish_blog_post')).toBe(false);
     expect(audit.value.events.some((event: any) => event.tool === 'write_note' && event.paths?.includes('Audit-visible.md'))).toBe(true);
     expect(audit.value.events.every((event: any) => !('accessToken' in event) && !('password' in event))).toBe(true);
   } finally {

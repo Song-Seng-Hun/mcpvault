@@ -5,7 +5,7 @@ import { decodeCodexHookEvent, hookHash, hookId, validateCodexHookConfig, type C
   type CodexHookAction, type CodexHookConfig } from './codex-hook-policy.js';
 import type { HostWorkWriter } from './host-work-storage.js';
 
-export type CodexHookWork = { action: 'resume' | 'community' }
+export type CodexHookWork = { action: 'resume' }
   | { action: 'search'; query: string }
   | { action: 'candidate'; path: string; expectedRevision: string }
   | { action: 'checkpoint'; checkpointId: string; expectedRevision: string }
@@ -44,13 +44,13 @@ export interface CodexHookResult {
 }
 const shutdown = (event: CodexHookEventName) => event === 'Interrupt' || event === 'SessionEnd';
 const actions: Record<CodexHookEventName, readonly CodexHookAction[]> = {
-  SessionStart: ['resume', 'community'], PostCompact: ['resume'], UserPromptSubmit: ['search'], PostToolUse: ['candidate'],
-  PreCompact: ['checkpoint'], Stop: ['checkpoint', 'compilation', 'community'], Interrupt: ['checkpoint'], SessionEnd: ['checkpoint'],
+  SessionStart: ['resume'], PostCompact: ['resume'], UserPromptSubmit: ['search'], PostToolUse: ['candidate'],
+  PreCompact: ['checkpoint'], Stop: ['checkpoint', 'compilation'], Interrupt: ['checkpoint'], SessionEnd: ['checkpoint'],
 };
 const invalid = () => guidanceError(Error('Hook state unavailable'), 'guid-da48d1293aee1586');
 function validateWork(work: CodexHookWork): void {
   if (!work || typeof work !== 'object') throw invalid();
-  const keys: Record<CodexHookAction, string[]> = { resume: ['action'], community: ['action'], search: ['action', 'query'],
+  const keys: Record<CodexHookAction, string[]> = { resume: ['action'], search: ['action', 'query'],
     candidate: ['action', 'path', 'expectedRevision'], checkpoint: ['action', 'checkpointId', 'expectedRevision'],
     compilation: ['action', 'requestId', 'expectedJobRevision'] };
   if (!keys[work.action] || Object.keys(work).some(k => !keys[work.action].includes(k))) throw invalid();

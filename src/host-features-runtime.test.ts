@@ -7,18 +7,10 @@ import { HOST_FEATURE_IDS_V1 } from './host-features.js';
 import { startRestApi } from './rest-api.js';
 import { DocumentSearch } from './document-search.js';
 
-const construction = vi.hoisted(() => ({ documents: vi.fn(), notifications: vi.fn(), community: vi.fn(), skills: vi.fn() }));
+const construction = vi.hoisted(() => ({ documents: vi.fn(), skills: vi.fn() }));
 vi.mock('./document-index.js', async original => {
   const module = await original<typeof import('./document-index.js')>();
   return { ...module, DocumentIndex: class extends module.DocumentIndex { constructor(...args: ConstructorParameters<typeof module.DocumentIndex>) { super(...args); construction.documents(); } } };
-});
-vi.mock('./notifications.js', async original => {
-  const module = await original<typeof import('./notifications.js')>();
-  return { ...module, NotificationService: class extends module.NotificationService { constructor(...args: ConstructorParameters<typeof module.NotificationService>) { super(...args); construction.notifications(); } } };
-});
-vi.mock('./community-features.js', async original => {
-  const module = await original<typeof import('./community-features.js')>();
-  return { ...module, CommunityFeaturesService: class extends module.CommunityFeaturesService { constructor(...args: ConstructorParameters<typeof module.CommunityFeaturesService>) { super(...args); construction.community(); } } };
 });
 vi.mock('./skill-evolution.js', async original => {
   const module = await original<typeof import('./skill-evolution.js')>();
@@ -36,16 +28,16 @@ async function fixture(options: CreateServerOptions = {}) {
 test('new runtimes default to wiki core without constructing optional services or exposing their endpoints', async () => {
   const { runtime } = await fixture();
   expect((await runtime.dispatchTool('call_endpoint', { endpointId: 'notes.read', arguments: { path: 'Note.md' } })).isError).not.toBe(true);
-  for (const endpoint of ['documents.read', 'memory.recall', 'work.board', 'community.post', 'roleplay.world']) expect(runtime.endpointRegistry.resolve(endpoint)).toBeUndefined();
+  for (const endpoint of ['documents.read', 'memory.recall', 'work.board', 'skill.resolve', 'roleplay.world']) expect(runtime.endpointRegistry.resolve(endpoint)).toBeUndefined();
   for (const count of Object.values(construction)) expect(count).not.toHaveBeenCalled();
 });
 
-test('explicit document convenience does not activate collaboration or other optional services', async () => {
+test('explicit document convenience does not activate other optional services', async () => {
   const { runtime } = await fixture({ features: { version: 1, selected: ['wiki-core', 'document-search'] } });
   expect(runtime.endpointRegistry.resolve('documents.read')).toBeDefined();
   expect((await runtime.dispatchTool('call_endpoint', { endpointId: 'documents.outline', arguments: { path: 'Note.md' } })).isError).not.toBe(true);
   expect(construction.documents).toHaveBeenCalledTimes(1);
-  expect(construction.notifications).not.toHaveBeenCalled(); expect(construction.skills).not.toHaveBeenCalled();
+  expect(construction.skills).not.toHaveBeenCalled();
 });
 
 test('server shutdown releases document search metadata caches', async () => {
@@ -68,8 +60,8 @@ test('disabled feature direct and operation-alias calls cannot bypass host selec
 test('explicit current feature snapshot preserves all current endpoints without granting provider execution', async () => {
   const { runtime } = await fixture({ features: { version: 1, selected: [...HOST_FEATURE_IDS_V1] } });
   expect(runtime.endpointRegistry.resolve('documents.read')).toBeDefined();
-  expect(runtime.endpointRegistry.resolve('community.post')).toBeDefined();
-  const response = await runtime.dispatchTool('call_endpoint', { endpointId: 'community.posts', arguments: {} });
+  expect(runtime.endpointRegistry.resolve('work.board')).toBeDefined();
+  const response = await runtime.dispatchTool('call_endpoint', { endpointId: 'skill.candidate', arguments: { op: 'list' } });
   expect(response.isError).toBe(true);
   expect(response.content[0].text).toMatch(/owner|consent|authority/i);
 });
@@ -100,10 +92,10 @@ test('REST and feature reactivation preserve files without a direct endpoint byp
   expect(response.isError).not.toBe(true); expect(response.content[0].text).toContain('Ordinary wiki');
 });
 
-test('personal memory and work selections leave community subscriptions off', async () => {
+test('personal memory and work selections leave skill evolution off', async () => {
   const { runtime } = await fixture({ features: { version: 1, selected: ['wiki-core', 'personal-memory', 'work-management'] } });
   expect(runtime.endpointRegistry.resolve('memory.recall')).toBeDefined();
   expect(runtime.endpointRegistry.resolve('work.board')).toBeDefined();
-  expect(runtime.endpointRegistry.resolve('community.post')).toBeUndefined();
-  expect(construction.notifications).not.toHaveBeenCalled(); expect(construction.skills).not.toHaveBeenCalled();
+  expect(runtime.endpointRegistry.resolve('skill.resolve')).toBeUndefined();
+  expect(construction.skills).not.toHaveBeenCalled();
 });

@@ -104,7 +104,7 @@ describe('legacy discussion MCP mutation boundary', () => {
     const response = await call(endpointId, { path: legacyPath, expectedRevision: revision, ...args });
     expect(response.result.isError, response.text).toBe(true);
     expect(response.text).toContain('historical read-only');
-    for (const endpoint of ['community.post', 'community.comment', 'community.status', 'notes.read']) expect(response.text).toContain(endpoint);
+    expect(response.text).toContain('notes.read');
     await expectPreserved();
     expect(await readFile(join(vault, 'ordinary.md'), 'utf8')).toBe(ordinaryBytes);
   });

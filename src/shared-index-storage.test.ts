@@ -13,10 +13,6 @@ import { VaultIoCoordinator } from './vault-io.js';
 import { decodeMetadataSnapshot } from './metadata-snapshot.js';
 import { SemanticSearchService } from './semantic-search.js';
 import { createHash } from 'node:crypto';
-import { NotificationService } from './notifications.js';
-import { CommunityFeaturesService } from './community-features.js';
-import { FileSystemService } from './filesystem.js';
-import { VaultFileCatalog } from './vault-catalog.js';
 
 const cleanup: Array<() => Promise<unknown>> = [];
 afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); vi.restoreAllMocks(); vi.unstubAllEnvs(); });
@@ -241,19 +237,3 @@ test('semantic hydration drops content revoked during its source read', async ()
   });
   expect(await (semantic as any).hydrateRows([{ id: 'Note.md#0', path: 'Note.md', hash: createHash('sha256').update(raw).digest('hex') }], { query: 'needle' })).toEqual([]);
 });
-
-test.each([true, false])('community snapshots remain host-only (configured=%s)', async configured => {
-  const f = await fixture(configured), fs = new FileSystemService(f.vault);
-  const catalog = new VaultFileCatalog(f.vault, f.filter); cleanup.push(async () => catalog.close());
-  const notifications = new NotificationService(fs, {} as any, f.vault, catalog);
-  const community = new CommunityFeaturesService(fs, {} as any, {} as any, undefined, f.vault, notifications, catalog);
-  cleanup.push(() => notifications.close(), () => community.close());
-  await notifications.discoverySnapshot(); await notifications.close();
-  await (community as any).saveReactionSnapshot(new Map());
-  expect(await readdir(f.vault)).toEqual(['Note.md']);
-  if (configured) {
-    expect((await f.store.read('public-discovery.snapshot.bin', { maxBytes: 1e6, maxDecodedBytes: 1e6 })).subarray(0, 8).toString()).toBe('MCPVPUB1');
-    expect(await (community as any).loadReactionSnapshot()).toMatchObject({ incomplete: false });
-    expect((await f.store.read('community-reactions.snapshot.bin', { maxBytes: 1e6 })).length).toBeGreaterThan(0);
-  } else expect(await readdir(f.host)).toEqual([]);
-}, 30000);

@@ -1,19 +1,19 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, test } from 'vitest';
 import { OwnerActivityPolicy } from './owner-activity.js';
-import type { Activity, OwnerActivityConfig, OwnerActivityRequest } from './owner-activity.js';
+import type { OwnerActivityConfig, OwnerActivityRequest } from './owner-activity.js';
 
 const now = Date.parse('2026-09-12T00:00:00.000Z');
 function config(): OwnerActivityConfig {
   return { version: 1, owners: { account1: 'owner1', account2: 'owner2' }, grants: [{
     id: 'grant1', ownerId: 'owner1', accountIds: ['account1'],
-    activities: ['collaboration'], actions: ['discover', 'read', 'claim', 'execute'],
+    activities: ['skill-evolution'], actions: ['discover', 'read', 'claim', 'execute'],
     dataPrefixes: ['Community/Allowed'], executionTargets: ['runtime1'],
     expiresAt: '2026-09-13T00:00:00.000Z',
   }] };
 }
 function request(overrides: Partial<OwnerActivityRequest> = {}): OwnerActivityRequest {
-  return { accountId: 'account1', executionTarget: 'runtime1', activity: 'collaboration',
+  return { accountId: 'account1', executionTarget: 'runtime1', activity: 'skill-evolution',
     action: 'read', paths: ['Community/Allowed/post.md'], now, ...overrides };
 }
 const denied = (reason: string) => ({ allowed: false, reason, permissionsGranted: false });
@@ -53,19 +53,6 @@ describe('owner activity consent decisions', () => {
     expect(policy.decision(request({ accountId: 'account2' }))).toEqual(denied('consent_required'));
     expect(new OwnerActivityPolicy({ version: 1, owners: {}, grants: [] }).decision(request()))
       .toEqual(denied('owner_unknown'));
-  });
-
-  test('all optional activities need their own explicit grant', () => {
-    const activities: Activity[] = ['collaboration',
-      'skill-evolution'];
-    for (const activity of activities) {
-      const input = config();
-      input.grants[0]!.activities = [activity];
-      const policy = new OwnerActivityPolicy(input);
-      expect(policy.decision(request({ activity }))).toEqual(granted);
-      const other = activity === 'skill-evolution' ? 'collaboration' : 'skill-evolution';
-      expect(policy.decision(request({ activity: other }))).toEqual(denied('consent_required'));
-    }
   });
 
   test('actions are independent and claim never implies execute', () => {
@@ -186,13 +173,13 @@ describe('bounded, immutable owner activity configuration', () => {
   });
 
   test('SHA256 canonical fingerprint is insensitive to object/list order and changes on revocation', () => {
-    const input = config(); input.grants[0]!.activities.push('skill-evolution');
+    const input = config();
     const policy = new OwnerActivityPolicy(input);
     const canonical = { version: 1, owners: { account1: 'owner1', account2: 'owner2' },
       grants: [{ ...input.grants[0]!, actions: ['claim', 'discover', 'execute', 'read'], revoked: false }] };
     expect(policy.fingerprint).toBe(createHash('sha256').update(JSON.stringify(canonical)).digest('hex'));
     input.owners = { account2: 'owner2', account1: 'owner1' };
-    input.grants[0]!.activities.reverse(); input.grants[0]!.actions.reverse();
+    input.grants[0]!.actions.reverse();
     expect(new OwnerActivityPolicy(input).fingerprint).toBe(policy.fingerprint);
     input.grants[0]!.revoked = true;
     expect(new OwnerActivityPolicy(input).fingerprint).not.toBe(policy.fingerprint);

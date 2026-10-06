@@ -19,7 +19,6 @@ test('typed mixed operation contract drives aliases and discovery across authori
       ['skill.rollback', 'preview', 'preview_skill_rollback', 'apply'],
       ['work.project', 'read', 'read_work_project', 'create'],
       ['work.group', 'read', 'read_work_group', 'join'],
-      ['community.participation', 'read', 'read_community_participation', 'update'],
     ];
     for (const [id, read, target, write] of pairs) {
       const endpoint = registry.resolve(id)!;
@@ -33,11 +32,10 @@ test('typed mixed operation contract drives aliases and discovery across authori
           skillEvolutionEnabled: configured,
           ownerActivity: { policyFingerprint: 'test-policy', executionBindingGeneration: 'test-host', eligibility: {
             'skill-evolution': { discover: true, read: true, claim: true, execute: true },
-            collaboration: { discover: true, read: true, claim: true, execute: true },
           } },
         }, false).endpoints[0]!;
         expect(listed.operations![write!]!.available, id).toBe(false);
-        const needsAuth = read!.includes('preview') || id === 'community.participation';
+        const needsAuth = read!.includes('preview');
         const needsHost = id!.startsWith('skill.');
         expect(listed.operations![read!]!.available, `${id}/${authenticated}/${configured}`)
           .toBe((!needsAuth || authenticated) && (!needsHost || configured));
@@ -45,6 +43,5 @@ test('typed mixed operation contract drives aliases and discovery across authori
     }
     expect(alias('manage_skill_candidate', undefined)).toBe('read_skill_candidate');
     expect(alias('manage_work_project', undefined)).toBe('read_work_project');
-    expect(alias('publish_blog_post', 'read')).toBeUndefined();
   } finally { await server.close(); await rm(root, { recursive: true, force: true }); }
 });

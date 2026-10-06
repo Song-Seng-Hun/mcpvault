@@ -99,7 +99,7 @@ test('two HTTP clients reuse the prepared catalog across repeated tools/list cal
     const lists = await Promise.all([first.listTools(), second.listTools(), first.listTools(), second.listTools()]);
     runtime.ensureEndpointRegistry(); runtime.ensureEndpointRegistry();
     for (const list of lists) {
-      expect(list.tools).toHaveLength(16);
+      expect(list.tools).toHaveLength(12);
       expect(list.tools.map(tool => tool.name)).toEqual(expect.arrayContaining([
         'call_endpoint', 'get_agent_pulse', 'list_active_capabilities', 'orient_wiki', 'search_capabilities',
       ]));
@@ -126,7 +126,7 @@ test('HTTP requests share one service bundle; separate runtimes create separate 
     const requestServers = wrappers.mock.results.map(result => result.value);
     expect(new Set(requestServers).size).toBe(requestServers.length);
     expect(requestServers).not.toContain(server);
-    await first.close(); expect((await second.listTools()).tools).toHaveLength(16);
+    await first.close(); expect((await second.listTools()).tools).toHaveLength(12);
     const search = await second.callTool({ name: 'call_endpoint', arguments: {
       endpointId: 'wiki.search', arguments: { query: 'ResourceProbe', limit: 1, maxChars: 2000, semantic: false },
     } });

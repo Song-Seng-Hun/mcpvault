@@ -5,7 +5,7 @@ import { validateCapabilitySelection, type CapabilityNode } from './capability-g
 
 /** Explicit v1 snapshot. Adding a future feature must not expand saved selections. */
 export const HOST_FEATURE_IDS_V1 = Object.freeze([
-  'wiki-core', 'document-search', 'personal-memory', 'work-management', 'collaboration',
+  'wiki-core', 'document-search', 'personal-memory', 'work-management',
   'skill-evolution',
 ] as const);
 export type HostFeatureId = typeof HOST_FEATURE_IDS_V1[number];
@@ -68,7 +68,7 @@ export function hostFeatureConfigFingerprint(input: unknown): string {
 /** Reviewed internal registration names, never namespace-prefix grants.
  * This snapshot comes from createServer's inventory and its tool factories.
  * Keep auth, safety, ordinary note task metadata, Canvas and MOC continuity in
- * core. Dedicated work boards/claims are optional; social XP is collaboration.
+ * core. Dedicated work boards/claims are optional.
  *
  * Resolve dynamic IDs/REST routes through the existing registry first and pass
  * its trusted descriptor.toolName. Do not use an untrusted caller-supplied name
@@ -123,23 +123,11 @@ const toolsByFeature: Record<HostFeatureId, readonly string[]> = {
   'document-search': ['get_document_outline', 'read_document', 'search_documents', 'get_resource_manifest', 'export_resource'],
   'personal-memory': [
     'memory_recall', 'memory_brief', 'memory_consolidate',
-    'list_journal_entries', 'read_journal_entry', 'write_journal_entry', 'save_item', 'unsave_item', 'list_saved_items',
   ],
   'work-management': [
     'create_agent_task', 'read_agent_task', 'list_agent_tasks', 'update_agent_task',
     'manage_work_group', 'read_work_coverage', 'manage_work_project', 'read_work_board', 'read_work_packet',
     'read_work_review_context', 'read_work_staffing', 'claim_work_task', 'handoff_work_task', 'review_work_task',
-  ],
-  collaboration: [
-    'comment_on_blog_post', 'delete_blog_comment', 'delete_blog_post', 'edit_blog_comment', 'list_blog_comments',
-    'list_blog_posts', 'list_mentions', 'publish_blog_post', 'read_blog_post', 'update_community_status',
-    'manage_community_participation', 'record_community_participation',
-    'archive_chat_room', 'create_chat_room', 'delete_chat_message', 'edit_chat_message', 'list_chat_rooms',
-    'read_chat_room', 'send_chat_message', 'list_whispers', 'send_whisper', 'read_context',
-    'list_notifications', 'mark_notifications_read', 'get_reputation',
-    'accept_blog_comment', 'delete_guestbook_entry', 'list_author_activity', 'list_blog_series', 'list_guestbook',
-    'list_popular_posts', 'list_reactions', 'list_watched_targets', 'toggle_reaction', 'unaccept_blog_comment',
-    'unwatch_target', 'watch_target', 'write_guestbook_entry',
   ],
   'skill-evolution': ['resolve_skill', 'record_skill_experience', 'manage_skill_candidate', 'evaluate_skill', 'promote_skill', 'rollback_skill'],
 };

@@ -6,14 +6,10 @@ const principal: ScopePrincipal = { accountId: 'test', modelId: 'test', role: 'm
 function pulse(options: { checkpoint?: boolean; busy?: boolean; ownerConsent?: boolean } = {}) {
   const calls: string[] = [];
   const service = new AgentPulseService(
-    { list: async () => ({ notifications: [], unreadCount: 0 }) } as any,
-    { pulsePosts: async () => ({ ownPublishedPosts: 0, activePosts: [], activeTotal: 0, feedbackPosts: [], feedbackTotal: 0, forumPosts: [], forumTotal: 0 }) } as any,
-    { listRooms: async () => ({ rooms: [], total: 0 }) } as any,
     { listAssignedOpen: async () => ({ tasks: [], total: 0, statusCounts: {} }) } as any,
     { read: async () => ({ exists: options.checkpoint === true }) } as any,
-    { getForPrincipal: async () => ({ level: 0, xp: 0, label: 'test' }) } as any,
     { reviewQueue: async () => ({ items: [], total: 0 }), inbox: async () => ({ items: [], total: 0 }), reviewPacket: async () => ({}) } as any,
-    undefined, undefined,
+    undefined,
     { nextAction: async ({ skillId }: { skillId: string }) => { calls.push(skillId); return { endpointId: 'skill.candidate', arguments: { skillId, candidateId: '123', op: 'read' } }; } } as any,
     async () => options.ownerConsent === false ? undefined : ({
       run: async <T>(reader: () => Promise<T>) => reader(), revalidate: async () => {}, assertFresh: () => {},

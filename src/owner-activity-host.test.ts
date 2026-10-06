@@ -14,14 +14,14 @@ async function fixture() {
   if (process.platform === 'win32') await promisify(execFile)('icacls.exe', [host, '/inheritance:r', '/grant:r', `${userInfo().username}:(OI)(CI)F`], { windowsHide: true });
   const path = join(host, 'owner-consent.json');
   const config = { vaultPath: vault, version: 1, owners: { account: 'owner' }, grants: [{
-    id: 'grant', ownerId: 'owner', accountIds: ['account'], activities: ['collaboration'], actions: ['discover', 'read'],
+    id: 'grant', ownerId: 'owner', accountIds: ['account'], activities: ['skill-evolution'], actions: ['discover', 'read'],
     dataPrefixes: ['Community/Posts'], executionTargets: ['runtime'], expiresAt: '2999-01-01T00:00:00.000Z',
   }] };
   const save = (value: unknown) => writeFile(path, JSON.stringify(value), { mode: 0o600 });
   await save(config);
   return { vault, host, path, config, save };
 }
-const request = () => ({ accountId: 'account', executionTarget: 'runtime', activity: 'collaboration' as const,
+const request = () => ({ accountId: 'account', executionTarget: 'runtime', activity: 'skill-evolution' as const,
   action: 'read' as const, paths: ['Community/Posts/a.md'], now: Date.now() });
 
 test('host consent is Vault-bound and refresh applies revocation without acquiring execution identity', async () => {

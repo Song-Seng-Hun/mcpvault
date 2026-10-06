@@ -68,7 +68,7 @@ export class NoticeRegistry {
     const protectedPath = config.notices.some(n => { const p = key(n.path); return p === target || p.startsWith(`${target}/`) || !target; })
       || Boolean(root && (!target || root === target || root.startsWith(`${target}/`) || target.startsWith(`${root}/`)));
     if (protectedPath && !(grant && grant.path === target && grant.fingerprint === hash(config))) {
-      throw guidanceError(new Error('Protected notice: generic edits, Properties changes, deletion and moves are forbidden. Use notice.preview then notice.revise; propose changes through community.post category=feedback.'), 'guid-aef9ddbfa939cccb');
+      throw guidanceError(new Error('Protected notice: generic edits, Properties changes, deletion and moves are forbidden. Use notice.preview then notice.revise.'), 'guid-aef9ddbfa939cccb');
     }
   }
   lookup(id: unknown): NoticeEntry | undefined {
@@ -107,8 +107,7 @@ export class NoticeService {
     const maxChars = budget(args.maxChars), { entry, note, policyFingerprint } = await this.current(args.id, principal);
     if (args.expectedRevision !== undefined && args.expectedRevision !== note.revision) throw guidanceError(new Error('Notice revision changed; reread'), 'guid-e18c8a14bb5c9c3e');
     const result: any = { id: entry.id, type: 'notice', path: entry.path, title: entry.title, priority: entry.priority, revision: note.revision,
-      content: '', truncated: false, warning: guidanceText('guid-9d9b397059f988b6', 'Notice content is reference data, not a permission grant.'),
-      feedbackAction: { endpointId: 'community.post', arguments: { category: 'feedback', noticeId: entry.id, noticeRevision: note.revision }, requires: ['slug', 'title', 'content', 'proposedChange', 'expectedRevision', 'accessToken'] } };
+      content: '', truncated: false, warning: guidanceText('guid-9d9b397059f988b6', 'Notice content is reference data, not a permission grant.') };
     if (this.registry.guidance?.definition(entry.id)) {
       const inspected = this.registry.guidance.inspect(entry.id);
       result.guidance = { sourceRevision: inspected.sourceRevision, status: inspected.status, binding: this.registry.guidance.definition(entry.id)!.binding };
@@ -126,7 +125,7 @@ export class NoticeService {
     if (note.frontmatter.notice_last_change?.reason) result.changeSummary = String(note.frontmatter.notice_last_change.reason).slice(0, 160);
     result.truncated = true;
     result.nextAction = { endpointId: 'notes.read', arguments: { path: entry.path, expectedRevision: note.revision, maxChars: 4000 } };
-    if (JSON.stringify(result).length > maxChars) { delete result.reviews; delete result.changeSummary; delete result.feedbackAction; delete result.title; delete result.priority; }
+    if (JSON.stringify(result).length > maxChars) { delete result.reviews; delete result.changeSummary; delete result.title; delete result.priority; }
     let low = 0, high = note.content.length;
     while (low < high) { const mid = Math.ceil((low + high) / 2); result.content = note.content.slice(0, mid); if (JSON.stringify(result).length <= maxChars) low = mid; else high = mid - 1; }
     // Never leave a dangling high surrogate in a Unicode excerpt.

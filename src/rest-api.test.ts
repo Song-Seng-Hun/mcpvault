@@ -3,7 +3,6 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
-import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { createServer } from '../tests/server-fixture.js';
 import { startRestApi, type RestApiHandle } from './rest-api.js';
 
@@ -66,10 +65,8 @@ test('REST adapter uses the same dynamic endpoint registry and dispatcher', asyn
   expect(discovered.has('notes.write')).toBe(false);
   expect(discovered.has('notes.read')).toBe(true);
   // The full catalog is itself bounded, so newly added endpoints may be past
-  // the response budget. Probe the generic executor to verify both are
+  // the response budget. Probe the generic executor to verify it is
   // registered without asking it to perform a real read.
-  const contextProbe = await fetch(`http://127.0.0.1:${api.port}/api/endpoint/context.read`);
-  expect(contextProbe.status).toBe(400);
   const continuityProbe = await fetch(`http://127.0.0.1:${api.port}/api/endpoint/continuity.resume`);
   expect(continuityProbe.status).toBe(400);
 
@@ -77,10 +74,10 @@ test('REST adapter uses the same dynamic endpoint registry and dispatcher', asyn
   expect(getMutation.status).toBe(405);
   expect(getMutation.headers.get('allow')).toBe('POST');
   expect(await getMutation.json()).toMatchObject({ endpointId: 'notes.write', expectedMethod: 'POST' });
-  const postRead = await fetch(`http://127.0.0.1:${api.port}/api/endpoint/context.read`, {
+  const postRead = await fetch(`http://127.0.0.1:${api.port}/api/endpoint/continuity.resume`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ targetType: 'post', targetId: 'missing' }),
+    body: JSON.stringify({}),
   });
   expect(postRead.status).toBe(405);
   expect(postRead.headers.get('allow')).toBe('GET');
@@ -203,49 +200,6 @@ test('REST adapter uses the same dynamic endpoint registry and dispatcher', asyn
   });
   expect(relationSetPreview.status).toBe(200);
   expect(await relationSetPreview.json()).toMatchObject({ valid: true, relation: 'supports', desired: { count: 1 }, changes: [expect.objectContaining({ path: 'nested/route.md' })], nextAction: { endpointId: 'notes.change_set' } });
-});
-
-test('canonical Community status shares revisions and state across REST and MCP', async () => {
-  const vault = await mkdtemp(join(tmpdir(), 'mcpvault-rest-discussion-'));
-  const server = createServer(vault);
-  const api = await startRestApi(server, { port: 0 });
-  resources.push({ vault, api, server });
-  const client = new Client({ name: 'canonical-discussion-test', version: 'test' });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
-  const post = (route: string, args: Record<string, unknown>) => fetch(`http://127.0.0.1:${api.port}${route}`, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(args),
-  });
-  const call = async (endpointId: string, args: Record<string, unknown>, accessToken?: string) => {
-    const result = await client.callTool({ name: 'call_endpoint', arguments: { endpointId, arguments: args, accessToken } });
-    expect(result.isError, JSON.stringify(result.content)).toBeFalsy();
-    return JSON.parse((result.content as any)[0].text);
-  };
-  try {
-    const registered = await post('/api/auth/register', { accountId: 'discussion-owner', modelId: 'codex', password: 'disposable-discussion-password' });
-    expect(registered.status).toBe(200);
-    const { accessToken } = await registered.json() as any;
-    const created = await call('community.post', {
-      slug: 'shared-debate', title: 'Shared debate', content: 'Evidence needs peer review.', category: 'discussion', expectedRevision: 'missing',
-    }, accessToken);
-    const transition = { targetType: 'post', slug: 'shared-debate', workflowStatus: 'resolved', reason: 'Peer review completed.', expectedRevision: created.revision };
-    const denied = await post('/api/community/status', transition);
-    expect(denied.status).not.toBe(200);
-    const closed = await post('/api/community/status', { ...transition, accessToken });
-    expect(closed.status).toBe(200);
-    const closedValue = await closed.json() as any;
-    expect(closedValue).toMatchObject({ success: true, workflowStatus: 'resolved', closed: true });
-    const reread = await call('community.post_read', { slug: 'shared-debate', maxChars: 4000 });
-    expect(reread.revision).toBe(closedValue.revision);
-    expect(reread.fm.workflow_status).toBe('resolved');
-    const stale = await post('/api/community/status', { ...transition, workflowStatus: 'open', accessToken });
-    expect(stale.status).not.toBe(200);
-    expect(await stale.text()).toMatch(/revision|conflict/i);
-    const reopened = await call('community.status', { ...transition, workflowStatus: 'open', reason: 'New evidence.', expectedRevision: reread.revision }, accessToken);
-    const finalRead = await fetch(`http://127.0.0.1:${api.port}/api/community/posts/shared-debate?maxChars=4000`);
-    expect(finalRead.status).toBe(200);
-    expect(await finalRead.json()).toMatchObject({ revision: reopened.revision, fm: { workflow_status: 'open' } });
-  } finally { await client.close(); }
 });
 
 test('REST adapter rate-limits anonymous account registration per client address', async () => {

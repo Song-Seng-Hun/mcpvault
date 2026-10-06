@@ -954,7 +954,7 @@ export class WorkService {
       try {
         const discussion = await this.communityTarget('post', fm.discussion_slug);
         locators.push({ kind: 'discussion', slug: discussion.id, revision: discussion.note.revision,
-          tool: 'community.post_read', arguments: { slug: discussion.id, includeComments: true, commentLimit: 5 } });
+          tool: 'notes.read', arguments: { path: discussion.path, maxChars: 7000 } });
       } catch { /* Draft, private, hidden, and missing discussions are omitted. */ }
     }
     if (fm.parent_task_id) {

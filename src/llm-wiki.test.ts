@@ -927,16 +927,13 @@ test('drillable facets and synthesis candidates close the authored Distill to Ex
   }
 });
 
-test('generated operating model directs peer argument to Community and preserves legacy discussion history', async () => {
+test('generated operating model preserves legacy discussion history as read-only', async () => {
   const fileSystem = new FileSystemService(vault);
   const access = new ScopeAccessPolicy();
   const service = new LlmWikiService(fileSystem, access, new ReferenceService(fileSystem, access));
   await service.initialize('', 'human');
   const schema = await readFile(join(vault, '_wiki/SCHEMA.md'), 'utf8');
   const rule = schema.split('\n').find(line => line.startsWith('7. '));
-  expect(rule).toContain('community.post');
-  expect(rule).toContain('community.comment');
-  expect(rule).toContain('community.status');
   expect(rule).toContain('notes.read');
   expect(rule).toContain('read-only');
   expect(rule).toContain('promotion');
@@ -3553,7 +3550,8 @@ test('claim provenance, progressive projections, duplicate preflight, impact, an
     const trust = await callJson(client, 'get_wiki_source_trust', { accessToken });
     expect(trust.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: trustedSource.value.path, trustLevel: 'high', integrity: 'intact', usedByKnowledgeNotes: 1 })]));
 
-    await callJson(client, 'publish_blog_post', { slug: 'promotable-research', title: 'A useful research result', content: 'This community result should become durable knowledge.', category: 'research', references: [trustedSource.value.path], expectedRevision: 'missing', accessToken });
+    await mkdir(join(vault, 'Community/Posts'), { recursive: true });
+    await writeFile(join(vault, 'Community/Posts/promotable-research.md'), `---\nmcpvault_type: blog_post\npost_id: promotable-research\nstatus: published\ncategory: research\ntitle: A useful research result\nreferences:\n  - ${trustedSource.value.path}\n---\nThis community result should become durable knowledge.\n`);
     const promotion = await callJson(client, 'get_wiki_promotion_candidates', { accessToken });
     expect(promotion.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ slug: 'promotable-research', suggestedPath: 'Knowledge/Community/promotable-research.md' })]));
 
@@ -4370,7 +4368,8 @@ test('portable migration preflight excludes non-global content and reports revis
     }
     await client.callTool({ name: 'write_note', arguments: { path: 'scope://agent/portable-worker/Private.md', content: '# Private\nNever export.', frontmatter: { stable_id: 'private-id' }, expectedRevision: 'missing', accessToken } });
     await client.callTool({ name: 'write_note', arguments: { path: 'Knowledge/Quarantined Portable.md', content: '# Quarantined\nNever export.', frontmatter: { note_kind: 'atomic', moderation_status: 'quarantined', stable_id: 'quarantined-id' }, expectedRevision: 'missing', accessToken } });
-    await callJson(client, 'publish_blog_post', { slug: 'portable-community-only', title: 'Community only', content: 'Never enter a global migration inventory.', expectedRevision: 'missing', accessToken });
+    await mkdir(join(vault, 'Community/Posts'), { recursive: true });
+    await writeFile(join(vault, 'Community/Posts/portable-community-only.md'), '---\nmcpvault_type: blog_post\npost_id: portable-community-only\nstatus: published\ntitle: Community only\n---\nNever enter a global migration inventory.\n');
 
     const defaultManifest = await callJson(client, 'get_wiki_organization_manifest', { accessToken });
     expect(defaultManifest.value).toMatchObject({
@@ -4568,8 +4567,9 @@ test('mixed Korean and English retrieval keeps durable Wiki context ahead of noi
       relations: { contradicts: ['[[Knowledge/RAG Guide]]'] }, polarity: 'negative', negativeType: 'counterexample',
       attempted: 'Use retrieved passages without checking relevance.', observed: 'The answer amplified an irrelevant passage.', failureCondition: 'Low-relevance retrieval.', reproduction: 'Query an ambiguous acronym.', whyRejected: 'Similarity alone is not evidence.', reusableLesson: 'Inspect relevance and preserve a counterpoint.', status: 'disputed', expectedRevision: 'missing', accessToken,
     });
+    await mkdir(join(vault, 'Community/Posts'), { recursive: true });
     for (let index = 0; index < 8; index += 1) {
-      await callJson(client, 'publish_blog_post', { slug: `rag-noise-${index}`, title: `회수 증강 생성 community thread ${index}`, content: `회수 증강 생성 discussion ${index}. ${'long community context '.repeat(120)}`, category: 'discussion', expectedRevision: 'missing', accessToken });
+      await writeFile(join(vault, `Community/Posts/rag-noise-${index}.md`), `---\nmcpvault_type: blog_post\npost_id: rag-noise-${index}\nstatus: published\ncategory: discussion\ntitle: 회수 증강 생성 community thread ${index}\n---\n회수 증강 생성 discussion ${index}. ${'long community context '.repeat(120)}\n`);
     }
 
     const search = await callJson(client, 'search_notes', { query: '회수 증강 생성', limit: 6, maxChars: 2200, includeRevisions: true, accessToken });

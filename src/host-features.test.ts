@@ -10,7 +10,7 @@ function api(): typeof import('./host-features.js') {
   return loaded!;
 }
 const ids = [
-  'wiki-core', 'document-search', 'personal-memory', 'work-management', 'collaboration',
+  'wiki-core', 'document-search', 'personal-memory', 'work-management',
   'skill-evolution',
 ] as const;
 const config = (...selected: string[]) => ({ version: 1, selected });
@@ -32,14 +32,14 @@ test.each(ids.slice(1))('%s can be selected independently with core and never si
   expect(f.parseHostFeatureConfig(config('wiki-core')).selected).not.toContain(id);
 });
 
-test('work management does not imply collaboration, economy, or model execution', () => {
+test('work management does not imply skill evolution, economy, or model execution', () => {
   const f = api();
   const selected = f.parseHostFeatureConfig(config('wiki-core', 'work-management'));
   expect(selected.selected).toEqual(['wiki-core', 'work-management']);
   expect(f.hostFeatureEligibility(selected, 'claim_work_task')).toEqual({
     feature: 'work-management', eligible: true, reason: 'selected', permissionsGranted: false,
   });
-  expect(f.hostFeatureEligibility(selected, 'send_chat_message').eligible).toBe(false);
+  expect(f.hostFeatureEligibility(selected, 'promote_skill').eligible).toBe(false);
   expect(f.hostFeatureEligibility(selected, 'manage_quest_contract').eligible).toBe(false);
 });
 
@@ -120,7 +120,6 @@ test('accepts data-only null-prototype records without modifying them', () => {
 const representatives = [
   ['wiki-core', 'get_wiki_canvas_view'], ['document-search', 'search_documents'],
   ['personal-memory', 'memory_recall'], ['work-management', 'read_work_board'],
-  ['collaboration', 'publish_blog_post'],
   ['skill-evolution', 'promote_skill'],
 ] as const;
 test.each(representatives)('maps %s to its exact internal tool %s independently of caller permission', (feature, tool) => {

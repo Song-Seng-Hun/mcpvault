@@ -30,27 +30,6 @@ export const RECORDING_MCP_TOOLS: Tool[] = [
       path: { type: 'string' }, expectedRevision: revision,
       maxChars: { type: 'integer', minimum: 512, maximum: 20000 }, accessToken: token,
     }, required: ['path'] } },
-  { name: 'list_journal_entries', description: 'List this authenticated agent\'s private journal IDs and revisions.',
-    annotations: read, inputSchema: { type: 'object', properties: {
-      limit: { type: 'integer', minimum: 1, maximum: 100 }, maxChars: { type: 'integer', minimum: 1000, maximum: 12000 },
-      cursor: { type: 'string' }, accessToken: token,
-    } } },
-  { name: 'read_journal_entry', description: 'Read one entry in this authenticated agent\'s private journal and its revision.',
-    annotations: read, inputSchema: { type: 'object', properties: {
-      entryId: { type: 'string' }, expectedRevision: revision,
-      maxChars: { type: 'integer', minimum: 1000, maximum: 12000 }, accessToken: token,
-    }, required: ['entryId'] } },
-  { name: 'create_journal_entry', description: 'Create a new private diary, work log or reflection for the authenticated agent; never update an existing entry.',
-    annotations: create, inputSchema: { type: 'object', properties: {
-      content: { type: 'string', maxLength: 20000 }, title: { type: 'string' }, date: { type: 'string' },
-      kind: { type: 'string', enum: ['diary', 'log', 'reflection'] }, tags: { type: 'array', items: { type: 'string' } },
-      references: { type: 'array', items: { type: 'string' } }, accessToken: token, agentLabel: label,
-    }, required: ['content'] } },
-  { name: 'update_journal_entry', description: 'Replace an existing private journal entry after reading its ID and revision; preserves omitted metadata.',
-    annotations: update, inputSchema: { type: 'object', properties: {
-      entryId: { type: 'string' }, content: { type: 'string', maxLength: 20000 }, expectedRevision: revision,
-      title: { type: 'string' }, accessToken: token, agentLabel: label,
-    }, required: ['entryId', 'content', 'expectedRevision'] } },
   { name: 'create_note', description: 'Create a new Wiki/research Markdown note at an authorized path; never overwrite an existing note.',
     annotations: create, inputSchema: { type: 'object', properties: {
       path: { type: 'string' }, content: { type: 'string' },
@@ -85,16 +64,6 @@ function requiredRevision(args: Record<string, unknown>): string {
 
 export function routeRecordingTool(name: string, args: Record<string, unknown>): { toolName: string; args: Record<string, unknown> } {
   const accessToken = args.accessToken;
-  if (name === 'create_journal_entry') return { toolName: 'write_journal_entry', args: {
-    content: requiredString(args, 'content'), expectedRevision: 'missing',
-    ...('title' in args && { title: args.title }), ...('date' in args && { date: args.date }),
-    ...('kind' in args && { kind: args.kind }), ...('tags' in args && { tags: args.tags }),
-    ...('references' in args && { references: args.references }), accessToken,
-  } };
-  if (name === 'update_journal_entry') return { toolName: 'write_journal_entry', args: {
-    entryId: requiredString(args, 'entryId'), content: requiredString(args, 'content'), expectedRevision: requiredRevision(args),
-    ...('title' in args && { title: args.title }), accessToken,
-  } };
   if (name === 'create_note') return { toolName: 'write_note', args: {
     path: requiredString(args, 'path'), content: args.content, ...('frontmatter' in args && { frontmatter: args.frontmatter }),
     mode: 'overwrite', expectedRevision: 'missing', accessToken,

@@ -21,17 +21,16 @@ test('one MCP listing advertises focused recording tools with honest safety anno
     const byName = new Map(listed.tools.map(tool => [tool.name, tool]));
     expect([...byName.keys()].sort()).toEqual([
       'orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint',
-      'get_wiki_policy', 'memory_brief', 'search_notes', 'read_note', 'list_journal_entries', 'read_journal_entry',
-      'create_journal_entry', 'update_journal_entry', 'create_note', 'patch_note', 'update_note_properties',
+      'get_wiki_policy', 'memory_brief', 'search_notes', 'read_note', 'create_note', 'patch_note', 'update_note_properties',
     ].sort());
     for (const name of ['orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities',
-      'get_wiki_policy', 'memory_brief', 'search_notes', 'read_note', 'list_journal_entries', 'read_journal_entry']) {
+      'get_wiki_policy', 'memory_brief', 'search_notes', 'read_note']) {
       expect(byName.get(name)?.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false, openWorldHint: false });
     }
-    for (const name of ['create_journal_entry', 'create_note']) {
+    for (const name of ['create_note']) {
       expect(byName.get(name)?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, openWorldHint: false });
     }
-    for (const name of ['update_journal_entry', 'patch_note', 'update_note_properties']) {
+    for (const name of ['patch_note', 'update_note_properties']) {
       expect(byName.get(name)?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true, openWorldHint: false });
     }
     expect(byName.get('call_endpoint')?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true, openWorldHint: true });
@@ -41,9 +40,9 @@ test('one MCP listing advertises focused recording tools with honest safety anno
   }
 });
 
-test('server instructions route private journals and shared research notes to distinct direct tools', () => {
+test('server instructions route private agent notes and shared research notes through direct tools', () => {
   expect(MCPVAULT_SERVER_INSTRUCTIONS).not.toContain('Exactly five tools');
-  expect(MCPVAULT_SERVER_INSTRUCTIONS).toContain('create_journal_entry');
+  expect(MCPVAULT_SERVER_INSTRUCTIONS).toContain('scope://agent/');
   expect(MCPVAULT_SERVER_INSTRUCTIONS).toContain('create_note');
   expect(MCPVAULT_SERVER_INSTRUCTIONS).toContain('private');
   expect(MCPVAULT_SERVER_INSTRUCTIONS).toMatch(/shared/i);
@@ -73,53 +72,6 @@ test('create_note uses exclusive creation and returns a revision for an authenti
     expect(JSON.stringify(search)).toContain(input.path);
     const policy = await client.callTool({ name: 'get_wiki_policy', arguments: { topic: 'knowledge', accessToken } });
     expect(policy.isError).toBeFalsy();
-  } finally {
-    await client.close();
-    await server.close();
-  }
-});
-
-test('journal create and revision-checked update preserve an omitted title', async () => {
-  const vault = await mkdtemp(join(tmpdir(), 'mcpvault-record-journal-'));
-  vaults.push(vault);
-  const { server, client } = await connectMcpClient(vault);
-  try {
-    const registration = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'auth.register', arguments: {
-      accountId: 'journal-agent', modelId: 'codex', agentId: 'journal-agent', password: 'test-only-password-1234',
-    } } });
-    const accessToken = JSON.parse(String(registration.content?.[0]?.type === 'text' ? registration.content[0].text : '{}')).accessToken;
-    const created = await client.callTool({ name: 'create_journal_entry', arguments: {
-      title: 'Pilot result', kind: 'reflection', content: 'Observed a plateau.', accessToken,
-    } });
-    expect(created.isError).toBeFalsy();
-    const first = JSON.parse(String(created.content?.[0]?.type === 'text' ? created.content[0].text : '{}'));
-    const before = await client.callTool({ name: 'read_journal_entry', arguments: { entryId: first.entryId, accessToken } });
-    const listed = await client.callTool({ name: 'list_journal_entries', arguments: { accessToken } });
-    expect(listed.isError).toBeFalsy();
-    expect(JSON.stringify(listed)).toContain(first.entryId);
-    const prior = JSON.parse(String(before.content?.[0]?.type === 'text' ? before.content[0].text : '{}'));
-    const changed = await client.callTool({ name: 'update_journal_entry', arguments: {
-      entryId: first.entryId, content: 'Observed a late improvement.', expectedRevision: prior.revision, accessToken,
-    } });
-    expect(changed.isError).toBeFalsy();
-    const after = await client.callTool({ name: 'read_journal_entry', arguments: { entryId: first.entryId, accessToken } });
-    const current = JSON.parse(String(after.content?.[0]?.type === 'text' ? after.content[0].text : '{}'));
-    expect(current.content).toContain('# Pilot result');
-    expect(current.content).toContain('Observed a late improvement.');
-    const stale = await client.callTool({ name: 'update_journal_entry', arguments: {
-      entryId: first.entryId, content: 'Stale overwrite', expectedRevision: prior.revision, accessToken,
-    } });
-    expect(stale.isError).toBe(true);
-    const otherRegistration = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'auth.register', arguments: {
-      accountId: 'other-journal-agent', modelId: 'codex', agentId: 'other-journal-agent', password: 'test-only-password-1234',
-    } } });
-    const otherToken = JSON.parse(String(otherRegistration.content?.[0]?.type === 'text' ? otherRegistration.content[0].text : '{}')).accessToken;
-    const otherRead = await client.callTool({ name: 'read_journal_entry', arguments: { entryId: first.entryId, accessToken: otherToken } });
-    expect(otherRead.isError).toBe(true);
-    const otherWrite = await client.callTool({ name: 'update_journal_entry', arguments: {
-      entryId: first.entryId, content: 'Not my journal', expectedRevision: current.revision, accessToken: otherToken,
-    } });
-    expect(otherWrite.isError).toBe(true);
   } finally {
     await client.close();
     await server.close();

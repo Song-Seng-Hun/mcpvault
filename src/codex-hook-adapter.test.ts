@@ -8,8 +8,6 @@ import { ContinuityService } from './continuity.js';
 import { CodexHookServiceAdapter } from './codex-hook-adapter.js';
 import type { CodexHookContext } from './codex-hook-service.js';
 import { compilationContentHash } from './compilation-model.js';
-import { OwnerActivityRuntime } from './owner-activity-runtime.js';
-import { OwnerActivityPolicy } from './owner-activity.js';
 
 let vault: string, fs: FileSystemService, access: ScopeAccessPolicy, context: CodexHookContext, current: typeof actor | undefined;
 const actor = { accountId: 'operator', modelId: 'test', role: 'agent' as const, agentId: 'worker', capabilities: ['write', 'publish'] as any };
@@ -61,20 +59,6 @@ test('compilation uses one pinned retry, never submits generated prose or repeat
   const work = { action: 'compilation' as const, requestId: 'job', expectedJobRevision: 'a'.repeat(64) };
   await a.execute(work, context); expect(execute.mock.calls[0]?.[0]).toMatchObject({ op: 'retry', requestId: 'job', expectedJobRevision: work.expectedJobRevision });
   await a.reconcile(work, context); expect(execute.mock.calls[1]?.[0]).toMatchObject({ op: 'read', requestId: 'job' });
-});
-test('community requires the existing owner consent in addition to the hook grant', async () => {
-  const pulse = vi.fn(async () => ({ state: 'ready' }));
-  await expect(adapter({ participation: { pulse } }).execute({ action: 'community' }, context)).rejects.toThrow('Hook operation unavailable');
-  expect(pulse).not.toHaveBeenCalled();
-});
-test('community reuses consent/quota pulse without starting or publishing a participation run', async () => {
-  const pulse = vi.fn(async () => ({ state: 'paused', candidates: [] })), record = vi.fn();
-  const policy = new OwnerActivityPolicy({ version: 1, owners: { operator: 'owner' }, grants: [{ id: 'consent', ownerId: 'owner',
-    accountIds: ['operator'], activities: ['collaboration'], actions: ['read'], dataPrefixes: ['.'], executionTargets: ['host'], expiresAt: '2999-01-01T00:00:00Z' }] });
-  const ownerActivity = new OwnerActivityRuntime({ policy: () => policy, execution: () => ({ accountId: 'operator', executionTarget: 'host' }) });
-  const result = await adapter({ participation: { pulse, record }, ownerActivity }).execute({ action: 'community' }, context);
-  expect(result).toMatchObject({ status: 'completed' }); expect(record).not.toHaveBeenCalled();
-  expect(result.packet).toBeUndefined();
 });
 test('permission changes after reading suppress the packet', async () => {
   const continuity = { read: async () => { current = undefined; return { content: 'SECRET' }; } };

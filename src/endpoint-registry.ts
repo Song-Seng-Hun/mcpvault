@@ -44,7 +44,7 @@ export interface EndpointAvailabilityContext {
   };
 }
 
-const OPTIONAL_ACTIVITIES = new Set<Activity>(['collaboration', 'skill-evolution']);
+const OPTIONAL_ACTIVITIES = new Set<Activity>(['skill-evolution']);
 export function ownerActivityForEndpointTool(toolName: string): Activity | undefined {
   const feature = hostFeatureForTool(toolName);
   return feature && OPTIONAL_ACTIVITIES.has(feature as Activity) ? feature as Activity : undefined;
@@ -79,21 +79,6 @@ function normalizeEndpointAlias(text: string): string {
   return text.toLowerCase().replace(/[_./-]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-const LEGACY_EXACT_TOOL_BY_QUERY = new Map<string, string>(
-  ([
-    ['create_discussion', 'publish_blog_post'],
-    ['create discussion', 'publish_blog_post'],
-    ['get_discussion', 'read_blog_post'],
-    ['get discussion', 'read_blog_post'],
-    ['add_discussion_argument', 'comment_on_blog_post'],
-    ['add discussion argument', 'comment_on_blog_post'],
-    ['update_discussion_status', 'update_community_status'],
-    ['update discussion status', 'update_community_status'],
-    ['resolve discussion', 'update_community_status'],
-    ['close discussion', 'update_community_status'],
-  ] as const).map(([query, toolName]) => [normalizeEndpointAlias(query), toolName] as const),
-);
-
 function catalogLimit(value: unknown): number {
   const parsed = value === undefined ? 20 : Number(value);
   if (!Number.isInteger(parsed) || parsed < 1) throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
@@ -126,8 +111,6 @@ const EXPLICIT_IDS: Record<string, string> = {
   preview_learning_configuration: 'configuration.learning_preview',
   list_guidance_catalog: 'guidance.catalog',
   list_notices: 'notice.list', read_notice: 'notice.read', preview_notice: 'notice.preview', revise_notice: 'notice.revise',
-  manage_community_participation: 'community.participation',
-  record_community_participation: 'community.participation_record',
   memory_recall: 'memory.recall',
   resolve_note_link: 'notes.resolve_link',
   memory_brief: 'memory.brief',
@@ -157,23 +140,8 @@ const EXPLICIT_IDS: Record<string, string> = {
   search_scoped_notes: 'wiki.search_scoped',
   record_search_feedback: 'wiki.search_feedback',
   get_search_improvement_candidates: 'wiki.search_improvements',
-  comment_on_blog_post: 'community.comment',
-  publish_blog_post: 'community.post',
-  update_community_status: 'community.status',
   publish_decision_record: 'wiki.decision_record',
   get_wiki_decision_register: 'wiki.decision_register',
-  delete_blog_post: 'community.post_delete',
-  list_blog_posts: 'community.posts',
-  read_blog_post: 'community.post_read',
-  list_blog_comments: 'community.comments',
-  send_chat_message: 'chat.message',
-  read_chat_room: 'chat.room_read',
-  create_chat_room: 'chat.room_create',
-  list_chat_rooms: 'chat.rooms',
-  list_mentions: 'community.mentions',
-  get_reputation: 'community.reputation',
-  list_notifications: 'notifications.list',
-  mark_notifications_read: 'notifications.mark_read',
   semantic_search_status: 'wiki.semantic_status',
   get_wiki_review_queue: 'wiki.review_queue',
   get_wiki_catalog: 'wiki.catalog',
@@ -258,7 +226,6 @@ const EXPLICIT_IDS: Record<string, string> = {
   resurface_wiki_archives: 'wiki.resurface_archives',
   update_wiki_projection: 'wiki.projection_update',
   propose_wiki_term_change: 'wiki.term_proposal',
-  read_context: 'context.read',
   save_work_state: 'continuity.save',
   resume_work_state: 'continuity.resume',
 };
@@ -271,8 +238,6 @@ const EXPLICIT_ROUTES: Record<string, { method: 'GET' | 'POST'; url: string }> =
   manage_work_project: { method: 'POST', url: '/api/work/project' },
   manage_work_group: { method: 'POST', url: '/api/work/group' },
   read_work_coverage: { method: 'GET', url: '/api/work/coverage' },
-  manage_community_participation: { method: 'POST', url: '/api/community/participation' },
-  record_community_participation: { method: 'POST', url: '/api/community/participation/record' },
   read_work_board: { method: 'GET', url: '/api/work/board' },
   read_work_packet: { method: 'GET', url: '/api/work/packet' },
   read_work_review_context: { method: 'GET', url: '/api/work/review-context' },
@@ -302,25 +267,10 @@ const EXPLICIT_ROUTES: Record<string, { method: 'GET' | 'POST'; url: string }> =
   search_scoped_notes: { method: 'GET', url: '/api/search/scoped' },
   record_search_feedback: { method: 'POST', url: '/api/search/feedback' },
   get_search_improvement_candidates: { method: 'GET', url: '/api/search/improvements' },
-  publish_blog_post: { method: 'POST', url: '/api/community/posts' },
   publish_decision_record: { method: 'POST', url: '/api/wiki/decision-record' },
   get_wiki_decision_register: { method: 'GET', url: '/api/wiki/decision-register' },
-  delete_blog_post: { method: 'POST', url: '/api/community/posts/{slug}/delete' },
-  list_blog_posts: { method: 'GET', url: '/api/community/posts' },
-  read_blog_post: { method: 'GET', url: '/api/community/posts/{slug}' },
-  comment_on_blog_post: { method: 'POST', url: '/api/community/posts/{slug}/comments' },
-  list_blog_comments: { method: 'GET', url: '/api/community/posts/{slug}/comments' },
-  update_community_status: { method: 'POST', url: '/api/community/status' },
-  send_chat_message: { method: 'POST', url: '/api/chat/rooms/{roomId}/messages' },
-  read_chat_room: { method: 'GET', url: '/api/chat/rooms/{roomId}/messages' },
-  create_chat_room: { method: 'POST', url: '/api/chat/rooms' },
-  list_chat_rooms: { method: 'GET', url: '/api/chat/rooms' },
-  list_mentions: { method: 'GET', url: '/api/mentions' },
-  get_reputation: { method: 'GET', url: '/api/community/reputation/{identity}' },
-  read_context: { method: 'GET', url: '/api/context' },
   resume_work_state: { method: 'GET', url: '/api/continuity' },
   save_work_state: { method: 'POST', url: '/api/continuity' },
-  list_notifications: { method: 'GET', url: '/api/notifications' },
   get_wiki_review_queue: { method: 'GET', url: '/api/wiki/review-queue' },
   get_wiki_catalog: { method: 'GET', url: '/api/wiki/catalog' },
   get_wiki_neighborhood: { method: 'GET', url: '/api/wiki/neighborhood' },
@@ -407,31 +357,16 @@ const EXPLICIT_ROUTES: Record<string, { method: 'GET' | 'POST'; url: string }> =
 const ENDPOINT_ALIASES: Record<string, string[]> = {
   search_notes: ['search', 'search notes', 'knowledge search', '지식 검색', '검색'],
   read_work_review_context: ['work review', 'task review', '작업 검토', '업무 검토'],
-  manage_community_participation: ['participation', 'community goals', 'pause', 'heartbeat'],
-  record_community_participation: ['participation run', 'resume', 'skip', 'defer'],
-  publish_blog_post: ['community', 'post', 'agora', 'debate', 'topic', 'introduction', 'feedback', 'forum', 'blocked', 'help request', 'source code', 'improvement', 'create_discussion', 'create discussion'],
-  delete_blog_post: ['community', 'post', 'delete', 'remove', 'archive'],
-  list_blog_posts: ['community', 'posts', 'agora', 'debate', 'topic', 'feed'],
-  read_blog_post: ['get_discussion', 'get discussion'],
-  comment_on_blog_post: ['comment', 'reply', 'agora', 'debate', 'stance', 'for', 'against', 'neutral', 'add_discussion_argument', 'add discussion argument'],
-  update_community_status: ['update_discussion_status', 'update discussion status', 'resolve discussion', 'close discussion'],
-  toggle_reaction: ['like', 'dislike', 'feedback', 'recognition'],
-  list_reactions: ['like', 'dislike', 'feedback', 'recognition'],
-  list_popular_posts: ['popular', 'liked', 'ranking', 'community'],
   report_content: ['moderation', 'report', 'prompt injection', 'malware', 'spam', 'harassment', 'privacy', 'impersonation'],
   list_moderation_reports: ['moderation', 'report', 'safety', 'abuse'],
   moderate_content: ['moderation', 'warn', 'hide', 'quarantine', 'remove', 'restore', 'ban', 'unban', 'safety'],
-  get_reputation: ['reputation', 'level', 'xp', 'experience', 'likes', 'dislikes', 'author level', 'user level'],
   patch_note: ['edit', 'partial', 'harness', 'replace', 'hunk'],
   save_work_state: ['session', 'handoff', 'checkpoint', 'save', 'understanding', 'resume', 'private', '세션', '인계', '이어가기', '이해', '저장'],
   resume_work_state: ['session', 'handoff', 'checkpoint', 'understanding', 'resume', 'resume work', '작업 재개', 'private', '세션', '인계', '이어가기', '이해', '복원'],
   patch_multiple_notes: ['edit', 'multiple notes', 'change set', 'transaction', 'atomic', 'rollback', 'reciprocal links', 'bulk properties'],
   sync_note_revisions: ['sync', 'delta', 'revision', 'cache', 'changed notes'],
   read_note_lines: ['read', 'partial', 'section', 'range', 'large note'],
-  read_context: ['context', 'mention', 'reply', 'nearby', 'thread', 'reference'],
   read_references: ['reference', 'citation', 'evidence', 'wikilink'],
-  list_blog_series: ['series', 'chapters', 'episodes'],
-  list_author_activity: ['author', 'profile', 'activity', 'posts by user'],
   get_wiki_review_queue: ['wiki', 'knowledge', 'review', 'due', 'stale', 'evidence', 'inbox'],
   get_wiki_catalog: ['wiki', 'catalog', 'index', 'metadata', 'facets', 'knowledge role', 'concept', 'argument', 'model', 'observation', 'counterargument', 'moc', 'project', 'tag'],
   get_wiki_neighborhood: ['wiki', 'neighborhood', 'nearby', 'related', 'adjacent', 'moc', 'links', 'semantic'],
@@ -699,10 +634,9 @@ export class EndpointRegistry {
       ? term
       : term.replace(/^[`"'(\[]+|[`"')\],;:.]+$/g, '')).filter(term => this.descriptors.has(term)));
     const normalizedQuery = normalizeEndpointAlias(text);
-    const exactLegacyToolName = LEGACY_EXACT_TOOL_BY_QUERY.get(normalizedQuery);
     const maxChars = catalogMaxChars(requestedMaxChars ?? (namedIds.size ? 20000 : undefined));
     const score = (item: EndpointDescriptor) => endpointScore(item, terms) + ((item.aliases || []).some(alias => normalizeEndpointAlias(alias) === normalizedQuery) ? 200 : 0);
-    const endpoints = (namedIds.size ? descriptors.filter(item => namedIds.has(item.endpointId)) : exactLegacyToolName ? descriptors.filter(item => item.toolName === exactLegacyToolName) : descriptors.filter(item => {
+    const endpoints = (namedIds.size ? descriptors.filter(item => namedIds.has(item.endpointId)) : descriptors.filter(item => {
         if (terms.length === 0) return true;
         const corpus = `${item.endpointId} ${item.toolName} ${item.description} ${(item.aliases || []).join(' ')} ${item.url}`.toLowerCase();
         return terms.every(term => corpus.includes(term) || corpus.replace(/[_./-]+/g, ' ').includes(term));

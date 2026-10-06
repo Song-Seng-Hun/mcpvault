@@ -6,8 +6,6 @@ import type { ContinuityService } from './continuity.js';
 import type { QuestionPacketService } from './question-packet.js';
 import type { CompilationService } from './compilation-service.js';
 import type { CompilationSession } from './compilation-session.js';
-import type { CommunityParticipationService } from './community-participation.js';
-import type { OwnerActivityRuntime } from './owner-activity-runtime.js';
 import { compilationHash, compilationPath } from './compilation-policy.js';
 import { compilationContentHash } from './compilation-model.js';
 import { hookHash } from './codex-hook-policy.js';
@@ -23,15 +21,12 @@ export interface CodexPreparedCheckpointStore {
 }
 export interface CodexHookAdapterOptions {
   fs: FileSystemService; access: ScopeAccessPolicy; continuity: ContinuityService;
-  questionPacket?: QuestionPacketService; compilation?: CompilationService; participation?: CommunityParticipationService;
+  questionPacket?: QuestionPacketService; compilation?: CompilationService;
   authorize(accountId: string): Promise<ScopePrincipal | undefined>;
   checkpoint?: CodexPreparedCheckpointStore;
-  ownerActivity?: OwnerActivityRuntime;
   compilationSession?: Pick<CompilationSession, 'generate' | 'application'>;
 }
-/** Narrow host adapter over existing services, not an arbitrary endpoint runner.
- * Public participation is an opportunity for the current agent only. Its actual
- * start/write/finish still use existing consent and publicRequestId enforcement. */
+/** Narrow host adapter over existing services, not an arbitrary endpoint runner. */
 export class CodexHookServiceAdapter implements CodexHookAdapter {
   constructor(private readonly options: CodexHookAdapterOptions) {}
   execute(work: CodexHookWork, context: CodexHookContext): Promise<CodexHookOutcome> { return this.run(work, context, false); }
@@ -43,24 +38,22 @@ export class CodexHookServiceAdapter implements CodexHookAdapter {
       const principal = await this.options.authorize(context.ticket.accountId);
       if (!principal || principal.accountId !== context.ticket.accountId || !principal.capabilities?.includes('write')) throw unavailable();
       const actor = compilationHash(principal), paths = context.ticket.paths.map(compilationPath);
-      const owner = work.action === 'community' ? await this.options.ownerActivity?.begin('collaboration', 'read', paths, principal) : undefined;
-      if (work.action === 'community' && !owner) throw unavailable();
       const boundary = access.captureDocumentBoundary(principal);
       const active = () => {
         if (context.signal.aborted || Date.now() >= context.deadline) throw unavailable();
-        boundary(); owner?.assertFresh();
+        boundary();
         if (paths.some(p => !access.canAccessPhysicalPath(p, principal, false)
           || access.isConfidentialDocument(p) && context.ticket.runtimeLocal !== true)) throw unavailable();
       };
       const check = async () => {
-        active(); await context.assertCurrent(); await owner?.revalidate();
+        active(); await context.assertCurrent();
         if (compilationHash(await this.options.authorize(principal.accountId)) !== actor) throw unavailable();
         active();
       };
       await check();
       return await withEnterpriseStorageContext({ access, principal, assertFresh: active,
-        canAccessPath: p => paths.includes(p) && (!owner || owner.canAccessPath(p)),
-        canTraversePath: p => (p === '.' || p === '' || paths.some(path => path.startsWith(p + '/'))) && (!owner || owner.canTraversePath(p)),
+        canAccessPath: p => paths.includes(p),
+        canTraversePath: p => (p === '.' || p === '' || paths.some(path => path.startsWith(p + '/'))),
         beforeWrite: async () => { if (work.action !== 'compilation') throw unavailable(); await check(); },
       }, async () => {
         const completed = (packet: Record<string, unknown>, include = true): CodexHookOutcome => {
@@ -114,12 +107,6 @@ export class CodexHookServiceAdapter implements CodexHookAdapter {
               && hookHash(packet.jobRevision)) result = { status: 'completed', revision: packet.jobRevision };
             break;
           }
-          case 'community':
-            if (this.options.participation) {
-              const packet = await this.options.participation.pulse({ principal, hostBusy: context.ticket.hostBusy, limit: 1, maxChars: context.maxChars });
-              result = completed(packet, packet.state === 'ready');
-            }
-            break;
         }
         await check(); return result;
       });

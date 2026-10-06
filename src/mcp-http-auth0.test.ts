@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { createServer } from './createServer.js';
-import { OwnerActivityPolicy } from './owner-activity.js';
 import { Auth0Resource, parseAuth0ResourceConfig } from './auth0-resource.js';
 import { getServerRuntime } from './createServer.js';
 import { startMcpHttpApi, type McpHttpHandle } from './mcp-http.js';
@@ -20,15 +19,10 @@ afterEach(async () => {
   }
 });
 
-async function fixture(consent: 'oauth' | 'explicit' | 'none' = 'oauth', withLocal = false) {
+async function fixture(withLocal = false) {
   const vault = await mkdtemp(join(tmpdir(), 'mcpvault-auth0-http-'));
   await mkdir(join(vault, '_scopes', 'users', 'research-agent'), { recursive: true });
   await writeFile(join(vault, '_scopes', 'users', 'research-agent', 'Secret.md'), 'USER_SCOPE_SECRET_FOR_TEST');
-  await mkdir(join(vault, 'Community', 'Posts'), { recursive: true });
-  for (const slug of ['self-introductions', 'outside-consent']) {
-    await writeFile(join(vault, 'Community', 'Posts', `${slug}.md`),
-      `---\nmcpvault_type: blog_post\npost_id: ${slug}\nstatus: published\nworkflow_status: active\ntitle: Introductions\nauthor: fixture\n---\nSay hello.\n`);
-  }
   const pair = await generateKeyPair('RS256');
   const jwk = await exportJWK(pair.publicKey);
   const config = parseAuth0ResourceConfig({
@@ -40,17 +34,8 @@ async function fixture(consent: 'oauth' | 'explicit' | 'none' = 'oauth', withLoc
     } }),
   });
   const auth0 = new Auth0Resource(config, createLocalJWKSet({ keys: [{ ...jwk, kid: 'test-key', alg: 'RS256', use: 'sig' }] }));
-  const policyConfig = { version: 1, owners: { 'research-agent': 'research-owner' }, grants: [{
-    id: 'introduction-test', ownerId: 'research-owner', accountIds: ['research-agent'],
-    activities: ['collaboration'], actions: ['discover', 'read', 'execute'],
-    dataPrefixes: ['Community/Posts/self-introductions.md', 'Community/Comments/self-introductions'],
-    executionTargets: ['auth0-research'], expiresAt: '2999-01-01T00:00:00.000Z',
-  }] };
-  let policy = new OwnerActivityPolicy(policyConfig);
   const server = createServer(vault, { version: '1.0.0',
-    features: { version: 1, selected: ['wiki-core', 'collaboration'] },
-    ...(consent === 'explicit' ? { ownerActivity: { policy: () => policy, execution: principal => auth0.ownerExecution(principal) } }
-      : consent === 'oauth' ? { ownerActivity: auth0.ownerActivity?.() } : {}),
+    features: { version: 1, selected: ['wiki-core'] }, ownerActivity: auth0.ownerActivity(),
   });
   const runtime = getServerRuntime(server)!;
   const registration = await runtime.dispatchTool('register_scope_account', {
@@ -65,9 +50,7 @@ async function fixture(consent: 'oauth' | 'explicit' | 'none' = 'oauth', withLoc
   const item: (typeof resources)[number] = { vault, api, server };
   resources.push(item);
   const base = `http://127.0.0.1:${api.port}`;
-  return { base, api, auth0, token, runtime, item,
-    revokeConsent: () => { policy = new OwnerActivityPolicy({ ...policyConfig, grants: [] }); },
-  };
+  return { base, api, auth0, token, runtime, item };
 }
 
 test('serves resource metadata and challenges anonymous MCP before dispatch', async () => {
@@ -100,7 +83,7 @@ test('gives a loopback metadata URL to an empty POST discovery probe', async () 
 });
 
 test('local Antigravity path discovers its own resource and rejects cross-audience tokens', async () => {
-  const { base, api, auth0, token, item } = await fixture('oauth', true);
+  const { base, api, auth0, token, item } = await fixture(true);
   const localPath = '/antigravity/mcp';
   const metadataUrl = `${base}/.well-known/oauth-protected-resource${localPath}`;
   const metadata = await fetch(metadataUrl);
@@ -214,74 +197,4 @@ test('OAuth bearer reaches direct recording tools without exposing credentials o
   const audit = await readFile(join(item.vault, '.mcpvault', 'audit.ndjson'), 'utf8');
   expect(audit).toContain('"reportedAgentLabel":"codex-mac"');
   expect(audit).not.toContain(jwt);
-});
-
-test('an explicit additional owner policy still restricts paths and supports revocation', async () => {
-  const { base, api, token, runtime, item, revokeConsent } = await fixture('explicit');
-  const client = new Client({ name: 'auth0-comment-test', version: '1.0.0' }, { versionNegotiation: { mode: 'auto' } });
-  item.client = client;
-  await client.connect(new StreamableHTTPClientTransport(new URL(`${base}${api.path}`), { authProvider: { token: async () => token() } }));
-  const discovery = await client.callTool({ name: 'search_capabilities', arguments: { query: 'community.comment', limit: 1 } });
-  expect(JSON.parse((discovery.content[0] as { text: string }).text).endpoints[0]).toMatchObject({ available: true, state: 'ready' });
-  const legacySession = await runtime.issueTrustedResearchSession!('research-agent', 'codex-mac');
-  const forged = await runtime.dispatchTool('call_endpoint', { endpointId: 'community.comment', accessToken: legacySession.accessToken,
-    arguments: { slug: 'self-introductions', content: 'not authorized', executionTarget: 'auth0-research' } });
-  legacySession.revoke();
-  expect(forged.isError).toBe(true);
-  const read = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'community.post_read', arguments: { slug: 'self-introductions' } } });
-  expect(read.isError).toBeFalsy();
-  const comment = await client.callTool({ name: 'call_endpoint', arguments: {
-    endpointId: 'community.comment', agentLabel: 'codex-mac', arguments: { slug: 'self-introductions', content: '안녕하세요. 연구 메모를 함께 쌓아가겠습니다.' },
-  } });
-  expect(comment.isError).toBeFalsy();
-  const commentId = JSON.parse((comment.content[0] as { text: string }).text).commentId as string;
-  expect(commentId).toBeTruthy();
-  const reread = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'community.comments', arguments: { slug: 'self-introductions' } } });
-  expect(JSON.stringify(reread)).toContain(commentId);
-  expect(await readFile(join(item.vault, '.mcpvault', 'audit.ndjson'), 'utf8')).toContain('"reportedAgentLabel":"codex-mac"');
-  const outside = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'community.comment',
-    arguments: { slug: 'outside-consent', content: 'not authorized' } } });
-  expect(outside.isError).toBe(true);
-  revokeConsent();
-  const revoked = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'community.comment',
-    arguments: { slug: 'self-introductions', content: 'not authorized' } } });
-  expect(revoked.isError).toBe(true);
-});
-
-test('OAuth authentication and feature selection without owner consent cannot unlock comments', async () => {
-  const { base, api, token, item } = await fixture('none');
-  const client = new Client({ name: 'auth0-no-consent', version: '1.0.0' }, { versionNegotiation: { mode: 'auto' } });
-  item.client = client;
-  await client.connect(new StreamableHTTPClientTransport(new URL(`${base}${api.path}`), { authProvider: { token: async () => token() } }));
-  const result = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'community.comment', agentLabel: 'codex-mac',
-    arguments: { slug: 'self-introductions', content: 'not authorized', executionTarget: 'auth0-research' } } });
-  expect(result.isError).toBe(true);
-});
-
-test('approved OAuth research scope supplies normal collaboration authorization without a separate owner file', async () => {
-  const { base, api, token, item } = await fixture();
-  const connect = async () => {
-    const client = new Client({ name: 'normal-research-client', version: '1.0.0' }, { versionNegotiation: { mode: 'auto' } });
-    item.client = client;
-    await client.connect(new StreamableHTTPClientTransport(new URL(`${base}${api.path}`), { authProvider: { token: async () => token() } }));
-    return client;
-  };
-  let client = await connect();
-  const discovery = await client.callTool({ name: 'search_capabilities', arguments: { query: 'community.comment', limit: 1 } });
-  expect(JSON.parse((discovery.content[0] as { text: string }).text).endpoints[0]).toMatchObject({ available: true, state: 'ready' });
-  const created = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'community.comment',
-    arguments: { slug: 'self-introductions', content: 'Hello from an authorized research client.' } } });
-  expect(created.isError).toBeFalsy();
-  const commentId = JSON.parse((created.content[0] as { text: string }).text).commentId;
-  expect(commentId).toBeTruthy();
-  await client.close();
-  client = await connect();
-  const reread = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'community.comments',
-    arguments: { slug: 'self-introductions', limit: 3, maxChars: 3000 } } });
-  expect(reread.isError).toBeFalsy();
-  expect(JSON.stringify(reread)).toContain(commentId);
-  const publish = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'community.post',
-    arguments: { slug: 'not-permitted', title: 'No', content: 'No', expectedRevision: 'missing' } } });
-  expect(publish.isError).toBe(true);
-  expect(JSON.stringify(publish)).toMatch(/Capability.*publish/);
 });

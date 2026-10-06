@@ -33,10 +33,16 @@ async function fixture(readOnly = false) {
   }
   return { call, tokens, vault, policy, configPath, client };
 }
+// Proposal creation was removed; existing Community feedback stays reviewable.
+async function legacyFeedback(vault: string, call: Awaited<ReturnType<typeof fixture>>['call'], slug: string, noticeRevision: string) {
+  await mkdir(join(vault, 'Community/Posts'), { recursive: true });
+  await writeFile(join(vault, `Community/Posts/${slug}.md`), `---\nmcpvault_type: blog_post\npost_id: ${slug}\nstatus: published\ncategory: feedback\nnotice_id: welcome\nnotice_revision: ${noticeRevision}\n---\nAn example would clarify the rule.\n`);
+  return call('notes.read', { path: `Community/Posts/${slug}.md` });
+}
 
 test('registered notices route onboarding and reject generic body/property/delete/ancestor mutations', async () => {
   const { call, tokens, vault, client } = await fixture();
-  expect((await client.listTools()).tools).toHaveLength(16);
+  expect((await client.listTools()).tools).toHaveLength(12);
   const read = await call('notice.read', { id: 'welcome' });
   expect(read.error).toBe(false);
   expect(read.value.content).toContain('Original conditions');
@@ -68,13 +74,10 @@ test('preview fingerprints bind authorized content, revision and current delegat
   expect((await call('notice.revise', { ...next, fingerprint: nextPreview.value.fingerprint })).error).toBe(true);
 });
 
-test('notice feedback uses exact notice revision instead of a fake source-code path', async () => {
-  const { call, tokens } = await fixture();
+test('notice reads advertise no removed proposal channel', async () => {
+  const { call } = await fixture();
   const read = await call('notice.read', { id: 'welcome' }); expect(read.error).toBe(false);
-  const proposal = { slug: 'welcome-feedback', title: 'Clarify welcome', content: 'The instructions need an example.', category: 'feedback', noticeId: 'welcome', noticeRevision: read.value.revision, proposedChange: 'Add an example.', expectedRevision: 'missing', accessToken: tokens.reader };
-  const post = await call('community.post', proposal); expect(post.error).toBe(false);
-  expect(post.value.noticeId).toBe('welcome');
-  expect((await call('community.post', { ...proposal, slug: 'stale-feedback', noticeRevision: '0'.repeat(64) })).error).toBe(true);
+  expect(read.value).not.toHaveProperty('feedbackAction');
 });
 
 test('notice reads respect response budget and read-only mode denies even delegated edits', async () => {
@@ -112,16 +115,13 @@ test('priority receipts skip unchanged notices and updated revisions resurface w
   expect(changed.primaryAction.arguments.expectedRevision).not.toBe(first.value.revision);
 });
 
-test('approved feedback is revision-linked in both notice and proposal reads', async () => {
-  const { call, tokens } = await fixture();
+test('approved legacy feedback is revision-linked in notice reads', async () => {
+  const { call, tokens, vault } = await fixture();
   const original = await call('notice.read', { id: 'welcome' });
-  const proposal = await call('community.post', { slug: 'example', title: 'Add example', content: 'An example clarifies the rule.', category: 'feedback', noticeId: 'welcome', noticeRevision: original.value.revision, proposedChange: 'Add example.', expectedRevision: 'missing', accessToken: tokens.reader });
+  const proposal = await legacyFeedback(vault, call, 'example', original.value.revision);
   const args = { id: 'welcome', content: '# Welcome\nOriginal conditions. Example here.', reason: 'Adopt proposed example', expectedRevision: original.value.revision, feedbackPath: proposal.value.path, feedbackRevision: proposal.value.revision, accessToken: tokens.editor };
   const preview = await call('notice.preview', args); expect(preview.error).toBe(false);
   const changed = await call('notice.revise', { ...args, fingerprint: preview.value.fingerprint }); expect(changed.error).toBe(false);
-  const post = await call('community.post_read', { slug: 'example' });
-  expect(post.error).toBe(false);
-  expect(post.value.noticeReview).toMatchObject({ decision: 'adopted', noticeRevision: changed.value.revision });
   const notice = await call('notice.read', { id: 'welcome' });
   expect(notice.value.reviews[0]).toMatchObject({ path: proposal.value.path, revision: proposal.value.revision, decision: 'adopted' });
 });
@@ -141,9 +141,9 @@ test('hidden registrations never leak through list, priority, or feedback; broke
 });
 
 test('deferred proposals can be explicitly reconsidered without requiring their author to rewrite history', async () => {
-  const { call, tokens } = await fixture();
+  const { call, tokens, vault } = await fixture();
   const original = await call('notice.read', { id: 'welcome' });
-  const proposal = await call('community.post', { slug: 'later', title: 'Later improvement', content: 'Please add an example.', category: 'feedback', noticeId: 'welcome', noticeRevision: original.value.revision, proposedChange: 'Example.', expectedRevision: 'missing', accessToken: tokens.reader });
+  const proposal = await legacyFeedback(vault, call, 'later', original.value.revision);
   const defer = { id: 'welcome', decision: 'deferred', reason: 'Need more context', expectedRevision: original.value.revision, feedbackPath: proposal.value.path, feedbackRevision: proposal.value.revision, accessToken: tokens.editor };
   const p = await call('notice.preview', defer); expect(p.error).toBe(false);
   const held = await call('notice.revise', { ...defer, fingerprint: p.value.fingerprint }); expect(held.error).toBe(false);
@@ -151,7 +151,7 @@ test('deferred proposals can be explicitly reconsidered without requiring their 
   expect((await call('notice.preview', adopt)).error).toBe(true);
   const rebased = await call('notice.preview', { ...adopt, rebaseFeedback: true }); expect(rebased.error).toBe(false);
   const done = await call('notice.revise', { ...adopt, rebaseFeedback: true, fingerprint: rebased.value.fingerprint }); expect(done.error).toBe(false);
-  expect((await call('community.post_read', { slug: 'later' })).value.noticeReview.decision).toBe('adopted');
+  expect((await call('notice.read', { id: 'welcome' })).value.reviews.at(-1)).toMatchObject({ path: proposal.value.path, decision: 'adopted' });
 });
 
 test('authority revoked during final preparation never commits a notice', async () => {

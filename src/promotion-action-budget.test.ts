@@ -64,8 +64,8 @@ test.each(['post', 'task'] as const)('%s verified ID keeps its existing managed 
   const { wiki } = await fixture(kind);
   const result: any = await wiki.promotionCandidates(undefined, 10, 16000);
   const inspect = result.items[0].promotionPlan.inspect;
-  expect(inspect.endpointId).toBe(kind === 'post' ? 'community.post_read' : 'mcp.read_agent_task');
-  expect(inspect.arguments[kind === 'post' ? 'slug' : 'taskId']).toBe('sample');
+  expect(inspect.endpointId).toBe(kind === 'post' ? 'notes.read' : 'mcp.read_agent_task');
+  expect(inspect.arguments[kind === 'post' ? 'path' : 'taskId']).toBe(kind === 'post' ? 'Community/Posts/sample.md' : 'sample');
   expect(result.items[0]).not.toHaveProperty('identityState');
 });
 
@@ -92,7 +92,7 @@ test('public MCP fallback action reads the original post, not its forged ID', as
   const [ct, st] = InMemoryTransport.createLinkedPair();
   try {
     await Promise.all([client.connect(ct), server.connect(st)]);
-    expect((await client.listTools()).tools).toHaveLength(16);
+    expect((await client.listTools()).tools).toHaveLength(12);
     const call = async (endpointId: string, args: Record<string, unknown>) => {
       const response: any = await client.callTool({ name: 'call_endpoint', arguments: { endpointId, arguments: args } });
       expect(response.isError).not.toBe(true);

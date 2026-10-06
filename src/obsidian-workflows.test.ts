@@ -29,8 +29,8 @@ test('dynamic views and host bundles are usable without expanding the five-tool 
     const view = await call('wiki.view', { path: 'View.md' }); expect(view.error, view.text).toBeFalsy(); expect(view.value.items[0].path).toBe('A.md');
     const base = await call('wiki.bases_view', { savedViewPath: 'View.md' }); expect(base.error, base.text).toBeFalsy(); expect(base.value.yaml).toContain('note_kind');
     const bundle = await call('wiki.property_contract', { hostBundle: true }); expect(bundle.error, bundle.text).toBeFalsy(); expect(bundle.value.fingerprint).toMatch(/^sha256:/);
-    const scaffold = await call('wiki.note_template', { authoring: { intent: 'reply', slug: 'self-introductions' } });
-    expect(scaffold.value.authoring.nextAction.endpointId).toBe('community.comment');
+    const scaffold = await call('wiki.note_template', { authoring: { intent: 'capture' } });
+    expect(scaffold.value.authoring.nextAction.endpointId).toBe('wiki.capture');
   } finally { await client.close(); await server.close(); }
 });
 test('MOC registration rejects anonymous and read-only clients', async () => {

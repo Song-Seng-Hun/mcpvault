@@ -81,7 +81,7 @@ export class Auth0Resource {
   private readonly authorizations = new WeakMap<ResearchAuthorization, number>();
   private readonly deniedPolicy = new OwnerActivityPolicy({ version: 1, owners: {}, grants: [] });
   private readonly requests = new AsyncLocalStorage<{
-    accountId: string; sessionId: string; active: boolean; expiresAt: number; policy: OwnerActivityPolicy;
+    accountId: string; sessionId: string; active: boolean; expiresAt: number;
   }>();
 
   constructor(readonly config: Auth0ResourceConfig, keys?: JWTVerifyGetKey) {
@@ -97,26 +97,16 @@ export class Auth0Resource {
     if (principal.accountId !== this.config.accountId || principal.role !== 'agent'
       || !principal.sessionId || authorization.accountId !== principal.accountId
       || expiresAt === undefined || Date.now() >= expiresAt) throw guidanceError(new Error('Invalid research request session'), 'guid-322cb2e37c28d777');
-    const owner = principal.userId || principal.accountId;
-    const policy = new OwnerActivityPolicy({ version: 1, owners: { [principal.accountId]: owner }, grants: [{
-      id: 'oauth-research', ownerId: owner, accountIds: [principal.accountId],
-      activities: ['collaboration'], actions: ['discover', 'read', 'execute'],
-      dataPrefixes: ['Community/Posts', 'Community/Comments'], executionTargets: ['auth0-research'],
-      expiresAt: new Date(expiresAt).toISOString(),
-    }] });
-    const context = { accountId: principal.accountId, sessionId: principal.sessionId, active: true, expiresAt, policy };
+    const context = { accountId: principal.accountId, sessionId: principal.sessionId, active: true, expiresAt };
     try { return await this.requests.run(context, callback); }
     finally { context.active = false; }
   }
 
-  /** OAuth's approved research scope supplies ordinary collaboration consent.
-   * This does not enable features or grant document/account capabilities. */
+  /** OAuth's research scope grants no optional owner activity; it binds only
+   * the execution identity. It never enables features or grants capabilities. */
   ownerActivity(): OwnerActivityRuntimeOptions {
     return {
-      policy: () => {
-        const context = this.requests.getStore();
-        return context?.active && Date.now() < context.expiresAt ? context.policy : this.deniedPolicy;
-      },
+      policy: () => this.deniedPolicy,
       execution: principal => this.ownerExecution(principal),
     };
   }

@@ -14,16 +14,11 @@ function fixture(values: Record<string, unknown> = {}, failures: string[] = [], 
     return name in values ? values[name] : fallback;
   };
   const service = new AgentPulseService(
-    { list: read('notifications', { notifications: [], unreadCount: 0 }) } as any,
-    { pulsePosts: read('posts', { activePosts: [], activeTotal: 0, ownPublishedPosts: 0, feedbackPosts: [], forumPosts: [] }) } as any,
-    { listRooms: read('rooms', { rooms: [], total: 0 }) } as any,
     { listAssignedOpen: read('tasks', emptyTasks) } as any,
     { read: read('continuity', { exists: false }) } as any,
-    { getForPrincipal: read('reputation', { level: 0, xp: 0, label: 'Newcomer' }) } as any,
     { reviewQueue: read('reviewQueue', { items: [], total: 0 }), inbox: read('inbox', { items: [], total: 0 }),
       readModelGeneration: () => 0, reviewPacket: read('maintenance', {}), synthesisCandidates: read('synthesis', { items: [] }) } as any,
     { pulse: read('work', { coverage: 'loaded' }) } as any,
-    undefined,
     { nextAction: read('skills', undefined) } as any,
     // Scheduling tests explicitly admit optional reads; no production grant.
     async () => ownerConsent ? ({ run: async <T>(reader: () => Promise<T>) => reader(),
@@ -36,18 +31,17 @@ test('without owner consent, scheduling never reads optional activity backends',
   const f = fixture({}, [], false);
   const value = await f.service.get({ principal, skillId: 'safe-edit' });
   expect(value.nextAction.tool).toBe('wiki.home');
-  for (const source of ['notifications', 'posts', 'rooms', 'reputation', 'skills']) {
+  for (const source of ['skills']) {
     expect(f.calls).not.toContain(source);
   }
 });
 
 test('checkpoint reads only continuity, even if every lower-priority backend fails', async () => {
-  const f = fixture({ continuity: { exists: true } }, ['work', 'tasks', 'notifications', 'posts', 'rooms', 'reputation', 'reviewQueue', 'inbox', 'maintenance', 'skills']);
+  const f = fixture({ continuity: { exists: true } }, ['work', 'tasks', 'reviewQueue', 'inbox', 'maintenance', 'skills']);
   const value = await f.service.get({ principal, skillId: 'safe-edit' });
   expect(value.nextAction).toMatchObject({ tool: 'continuity.resume' });
   expect(f.calls).toEqual(['continuity']);
-  expect(value.coverage).toMatchObject({ continuity: { state: 'loaded' }, work: { state: 'skipped' }, notifications: { state: 'skipped' } });
-  expect(value.signals).not.toHaveProperty('unreadNotifications');
+  expect(value.coverage).toMatchObject({ continuity: { state: 'loaded' }, work: { state: 'skipped' }, skills: { state: 'skipped' } });
   expect(value.signals).not.toHaveProperty('assignedOpenTasks');
   expect(value.identity).not.toHaveProperty('xp');
 });
@@ -56,7 +50,7 @@ test.each(['continuity', 'work', 'tasks'])('required %s failure does not enable 
   const f = fixture({}, [source]);
   await expect(f.service.get({ principal })).rejects.toThrow();
   expect(f.calls.at(-1)).toBe(source);
-  expect(f.calls).not.toContain('notifications');
+  expect(f.calls).not.toContain('reviewQueue');
 });
 
 test('unavailable Work coverage does not masquerade as no assigned work', async () => {
@@ -83,19 +77,11 @@ test('current Work wins before legacy tasks and all optional sources', async () 
   expect(value.signals).not.toHaveProperty('assignedOpenTasks');
 });
 
-test('notification selection skips maintenance, posts, rooms, ideas and reputation', async () => {
-  const f = fixture({ notifications: { notifications: [{ sourceType: 'blog_post', sourceId: 'answer', kind: 'reply' }], unreadCount: 1 } });
-  const value = await f.service.get({ principal });
-  expect(value.nextAction).toMatchObject({ tool: 'community.post_read', arguments: { slug: 'answer' } });
-  expect(f.calls).toEqual(['continuity', 'work', 'tasks', 'notifications']);
-});
-
 test('optional failures have fixed coverage reasons, not false empty counts or private errors', async () => {
-  const f = fixture({}, ['notifications', 'reviewQueue', 'inbox', 'posts', 'skills', 'maintenance', 'rooms', 'reputation']);
+  const f = fixture({}, ['reviewQueue', 'inbox', 'skills', 'maintenance']);
   const value = await f.service.get({ principal, skillId: 'safe-edit' });
-  expect(value.nextAction).toMatchObject({ tool: 'community.posts' });
-  expect(value.coverage).toMatchObject({ notifications: { state: 'unavailable', reason: 'read_failed' }, rooms: { state: 'unavailable', reason: 'read_failed' } });
-  expect(value.signals).not.toHaveProperty('activeRooms');
+  expect(value.nextAction).toMatchObject({ tool: 'wiki.home' });
+  expect(value.coverage).toMatchObject({ reviewQueue: { state: 'unavailable', reason: 'read_failed' }, inbox: { state: 'unavailable', reason: 'read_failed' } });
   expect(value.signals).not.toHaveProperty('maintenanceAvailable');
   expect(JSON.stringify(value)).not.toContain('private backend');
   expect(JSON.stringify(value.nextAction)).not.toMatch(/No unread activity|No .*waiting/);
@@ -105,5 +91,4 @@ test('review wins before Inbox', async () => {
   const review = fixture({ reviewQueue: { items: [{ path: 'Knowledge/Due.md' }], total: 1 } });
   expect((await review.service.get({ principal })).nextAction).toMatchObject({ target: 'Knowledge/Due.md' });
   expect(review.calls).not.toContain('inbox');
-  expect(review.calls).not.toContain('posts');
 });
