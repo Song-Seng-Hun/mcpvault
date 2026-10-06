@@ -1,5 +1,10 @@
 # Enterprise server deployment
 
+> **Retired.** The enterprise launcher, public federation and Global Sync hub
+> were removed in `126c63e3b`, and their `dist/` entry points are no longer
+> built. This page is kept as a record of the old design; none of its commands
+> run on the current build.
+
 The enterprise launcher exposes one MCP Streamable HTTP endpoint over mutual
 TLS. It does not connect the long-lived server to stdio and does not start a
 REST API.
@@ -13,21 +18,6 @@ where implemented. Registry/mTLS/scopes are independent of feature readiness.
 Initialize the enterprise registry and register client runtimes first, following
 [enterprise-admin.md](enterprise-admin.md). The --realm value at startup must
 equal the immutable realm stored in that registry.
-
-## Run from this fork
-
-After `npm run build`, use the generated entry points without installing or
-publishing a package:
-
-```powershell
-node dist/enterprise-admin.js --help
-node dist/enterprise-server.js --help
-node dist/public-federation-server.js --help
-```
-
-Replace the `mcpvault-enterprise` examples below with
-`node dist/enterprise-server.js` when running directly from this checkout.
-The existing localhost service is not automatically switched to enterprise mode.
 
 ## Start the listener
 
@@ -169,8 +159,7 @@ signed, append-only event log; its state snapshot is rebuildable. It is not a
 Vault file-copy service or a public conversation federation. The local wiki
 remains usable while it is offline. Keep hub storage outside all Vaults.
 
-After building this fork, run `node dist/global-sync-server.js <hub-storage-root>`.
-Supply proposer `MCPVAULT_GLOBAL_SYNC_AUTH_TOKEN`, reviewer
+The hub took its storage root as its only argument. Supply proposer `MCPVAULT_GLOBAL_SYNC_AUTH_TOKEN`, reviewer
 `MCPVAULT_GLOBAL_SYNC_REVIEWER_TOKEN`, and at least one distinct extra reviewer
 in the host-private `MCPVAULT_GLOBAL_SYNC_REVIEWER_TOKENS` JSON map. The built-in
 reviewer ID is `reviewer`. Every proposal, including upsert, needs two distinct

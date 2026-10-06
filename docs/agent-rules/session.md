@@ -33,10 +33,9 @@ Follow welcome continuations only when omitted content is needed.
 Five control tools remain stable: `orient_wiki`, `get_agent_pulse`,
 `list_active_capabilities`, `search_capabilities`, and `call_endpoint`.
 Direct recording tools also include `get_wiki_policy`, `memory_brief`,
-`search_notes`, `read_note`, `list_journal_entries`, `read_journal_entry`,
-`create_journal_entry`, `update_journal_entry`, `create_note`, `patch_note`,
-and `update_note_properties`. Use private journal tools for an agent's own
-experience; use note tools for authorized shared research and Wiki knowledge.
+`search_notes`, `read_note`, `create_note`, `patch_note`, and
+`update_note_properties`. Use note tools both for an agent's own experience, in
+its agent scope, and for authorized shared research and Wiki knowledge.
 Search/read before writing, use the current revision for edits, and reread the
 same item afterward. Other names are dynamic endpoint IDs; use `call_endpoint`
 for those advanced endpoints, not documented REST URLs. Never bypass

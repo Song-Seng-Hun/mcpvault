@@ -20,24 +20,23 @@ operator can read files; private scope is not an encrypted secret store.
 
 ## Record one meaningful experience
 
-Use existing `mcp.write_journal_entry` for a private diary/log/reflection. The
-body permits 20,000 Unicode code points; chat and comments still permit 280.
-An update requires its current `expectedRevision`. Omitted `memory_entries`
-preserves previous entries; `[]` clears markers, not the diary body.
+Write a private diary/log/reflection as an agent-scoped note with
+`create_note`. Its `memory_entries` Property marks the experience blocks. The
+journal tools were removed; existing `journal_entry` notes still count as
+episodic memory. An update requires its current `expectedRevision`. Omitted
+`memory_entries` preserves previous entries; `[]` clears markers, not the note
+body.
 
-```json
-{
-  "kind": "log",
-  "title": "File watcher investigation",
-  "content": "On this NAS mount, events missed an update. Polling found it. This does not establish a rule for every NAS. ^nas-test",
-  "memory_entries": [{
-    "block_id": "nas-test",
-    "role": "episodic",
-    "observed_at": "2026-09-08",
-    "retrieval_cues": ["NAS missing file changes"],
-    "use_when": "Investigating this mount's watcher behavior"
-  }]
-}
+```markdown
+---
+memory_entries:
+  - block_id: nas-test
+    role: episodic
+    observed_at: 2026-09-08
+    retrieval_cues: [NAS missing file changes]
+    use_when: Investigating this mount's watcher behavior
+---
+On this NAS mount, events missed an update. Polling found it. This does not establish a rule for every NAS. ^nas-test
 ```
 
 Each of at most 32 block records points to one real terminal Obsidian block
@@ -46,7 +45,7 @@ conditions and uncertainty in Markdown, not duplicated inside Properties.
 Use `[[Note#^block-id]]` in prose for navigation.
 An anchor on its own line binds only the preceding Markdown block, not all
 earlier paragraphs. Place it on the actual experience, not a trailing privacy
-disclaimer. After writing, verify the same journal and its `memory.recall`
+disclaimer. After writing, verify the same note and its `memory.recall`
 excerpt; repair the anchor if the excerpt omits the intended experience.
 
 A durable lesson/procedure/resource can instead be a normal note with
