@@ -98,3 +98,35 @@ test('a write barrier that denies the target keeps the file a move would overwri
     expect((await fs.readNote('Kept.md')).content).toContain('# Kept');
   } finally { await rm(vault, { recursive: true, force: true }); }
 });
+
+test('a note move denied for its source reaches no write barrier for the destination', async () => {
+  const vault = await mkdtemp(join(tmpdir(), 'mcpvault-barrier-order-'));
+  try {
+    const fs = new FileSystemService(vault);
+    await fs.writeNote({ path: 'Source.md', content: '# Source\n' });
+    const barrier: string[] = [];
+    const context = { access: new ScopeAccessPolicy(), assertFresh() {},
+      beforeWrite: async (path: string) => { barrier.push(path); if (path === 'Source.md') throw new Error('barrier denied the source'); } };
+    const revision = (await fs.readNote('Source.md')).revision;
+    expect(await withEnterpriseStorageContext(context, () => fs.moveNote({ oldPath: 'Source.md', newPath: 'Moved.md', expectedRevision: revision })))
+      .toMatchObject({ success: false, message: expect.stringMatching(/barrier denied the source/) });
+    expect(barrier).toEqual(['Source.md']);
+    expect(await readdir(vault)).toEqual(['Source.md']);
+  } finally { await rm(vault, { recursive: true, force: true }); }
+});
+
+test('a note move whose rollback also fails says so and names what it could not restore', async () => {
+  const vault = await mkdtemp(join(tmpdir(), 'mcpvault-barrier-order-'));
+  try {
+    const fs = new FileSystemService(vault);
+    await fs.writeNote({ path: 'Source.md', content: '# Source\n' });
+    // Each path is admitted once, then revoked: the source removal fails, and so does undoing the destination.
+    const seen = new Set<string>();
+    const context = { access: new ScopeAccessPolicy(), assertFresh() {},
+      beforeWrite: async (path: string) => { if (seen.has(path)) throw new Error(`revoked ${path}`); seen.add(path); } };
+    const revision = (await fs.readNote('Source.md')).revision;
+    const result = await withEnterpriseStorageContext(context, () => fs.moveNote({ oldPath: 'Source.md', newPath: 'Moved.md', expectedRevision: revision }));
+    expect(result).toMatchObject({ success: false, message: expect.stringMatching(/revoked Source\.md.*Rollback incomplete.*Moved\.md \(revoked Moved\.md\)/) });
+    expect((await readdir(vault)).sort()).toEqual(['Moved.md', 'Source.md']);
+  } finally { await rm(vault, { recursive: true, force: true }); }
+});

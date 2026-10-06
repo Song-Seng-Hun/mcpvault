@@ -2220,6 +2220,9 @@ export class FileSystemService {
         }
         throw error;
       }
+      // The source's removal checks run before any backlink or destination
+      // write; removeProtectedFile repeats them at the end.
+      await this.admitRemoval(relative(this.vaultPath, oldFullPath).replace(/\\/g, '/'));
 
       if (updateLinks) {
         if (!params.expectedRevision || !String(params.expectedRevision).trim()) {
@@ -2312,28 +2315,32 @@ export class FileSystemService {
       };
 
     } catch (error) {
+      // The original error stays the reported cause; each rollback failure is listed after it.
+      const unrestored: string[] = [];
+      const reason = (failure: unknown) => failure instanceof Error ? failure.message : 'Unknown error';
       if (destinationTouched) {
         try {
           if (destinationBackup !== undefined) await this.writeProtectedFile(newFullPath, destinationBackup, 'utf-8');
           else await this.removeProtectedFile(newFullPath);
           this.notifyNoteChanged(newPath, destinationBackup !== undefined ? 'upsert' : 'delete');
-        } catch {
-          // Preserve the original error; the failure message below flags that the move did not complete.
+        } catch (rollbackError) {
+          unrestored.push(`${newPath} (${reason(rollbackError)})`);
         }
       }
       for (const backup of linkBackups.filter(item => item.updated).reverse()) {
         try {
           await this.writeProtectedFile(this.resolveWritablePath(backup.path), backup.original, 'utf-8');
           this.notifyNoteChanged(backup.path, 'upsert');
-        } catch {
-          // Preserve the original failure while making the partial rollback visible in the message.
+        } catch (rollbackError) {
+          unrestored.push(`${backup.path} (${reason(rollbackError)})`);
         }
       }
+      const rollback = unrestored.length ? ` Rollback incomplete, so both copies of the note may remain; not restored: ${unrestored.join('; ')}.` : '';
       return {
         success: false,
         oldPath,
         newPath,
-        message: guidanceText('guid-66af0397c6aeece4', `Failed to move note: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        message: guidanceText('guid-66af0397c6aeece4', `Failed to move note: ${reason(error)}${rollback}`)
       };
     }
   }
