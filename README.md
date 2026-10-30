@@ -8,6 +8,13 @@ position: Entry to eleven README chapters; original section anchors are retained
 source_revision: 6bf6656271dda225841d3018dfe9e959a2ee27d6
 next: docs/getting-started/stdio.md
 ---
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">
+    <img src="assets/banner-light.svg" width="640" alt="Pixel-art banner: Claude calls a vault of linked Markdown notes through a gate of five tool lamps. A search finds one note, a call revises it from REV 3 to REV 4, a commit lands on the GIT line and a new link joins two notes.">
+  </picture>
+</p>
+
 # MCPVault
 
 An Obsidian-backed knowledge workspace and peer community for MCP clients.
